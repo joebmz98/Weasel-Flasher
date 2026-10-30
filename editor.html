@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WEASEL MIDI Settings | .axs instruments</title>
+  <meta name="description" content="Set the WEASEL synthesiser's MIDI receive channel over USB, and watch incoming MIDI.">
+  <link rel="preload" href="assets/fonts/caprasimo-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/nanum-gothic-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="assets/axs-logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .connect { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px; align-items: center; }
+    .connect .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .connect .who .readout { font-size: 24px; }
+    .connect .btn-row { justify-content: flex-end; }
+    @media (max-width: 720px) { .connect { grid-template-columns: 1fr; } .connect .btn-row { justify-content: flex-start; } }
+
+    .channel { display: grid; gap: 16px; }
+    .channel label { font-size: 14px; }
+    .channel .now { font-size: 15px; }
+
+    .monitor { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px 22px; align-items: center; }
+    .monitor .big { font-family: var(--title); font-size: 56px; line-height: .9; min-width: 2.6ch; }
+    .monitor .facts { display: grid; gap: 6px; font-size: 15px; }
+    .monitor .leds { grid-column: 1 / -1; display: flex; gap: 20px; flex-wrap: wrap; font-size: 14px; }
+    .monitor .leds span { display: inline-flex; align-items: center; gap: 8px; }
+    .monitor .ignored { grid-column: 1 / -1; font-size: 14px; min-height: 1.4em; }
+    .velbar { height: 10px; border-radius: 5px; background: var(--metal); overflow: hidden; width: 100%; max-width: 180px; display: inline-block; vertical-align: middle; }
+    .velbar > i { display: block; height: 100%; width: 0; background: var(--silk); transition: width .12s; }
+
+    .store { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px; align-items: center; }
+    .store .state { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+    @media (max-width: 720px) { .store { grid-template-columns: 1fr; } }
+
+    .disabled-zone { transition: opacity .2s; }
+    body.offline .disabled-zone { opacity: .42; }
+    body.offline .disabled-zone * { pointer-events: none; }
+  </style>
+</head>
+<body class="offline">
+<main class="panel">
+<div class="panel-inner">
+
+  <div class="edge" aria-hidden="true">
+    <span class="jack" id="jackUsb">usb</span>
+    <span class="jack" id="jackMidi">midi in</span>
+    <span class="push dim" id="edgeInfo">not connected</span>
+  </div>
+
+  <header class="plate">
+    <h1 class="wordmark"><a href="./" data-tool>WEASEL</a></h1>
+    <img class="mascot" src="assets/axs-logo.svg" alt="" width="26" height="40">
+    <p class="plate-sub">Digital West Coast Synth<br>Inspired by the MUSIC EASEL
+      <small>midi settings</small></p>
+  </header>
+
+  <nav class="tabs" aria-label="Tools">
+    <a href="editor.html" data-tool aria-current="page">MIDI settings</a>
+    <a href="presets.html" data-tool>Presets</a>
+    <a href="./#flash" data-tool>Update firmware</a>
+    <span class="fill"></span>
+  </nav>
+
+  <div class="rack">
+
+    <section class="module span-12 last-in-row">
+      <div class="module-head"><h2>Connection</h2><span id="linkKind">usb serial</span><span class="fill"></span></div>
+      <div class="module-body connect">
+        <div class="who">
+          <span class="led" id="linkLed"></span>
+          <span class="readout" id="deviceName">not connected</span>
+          <span class="dim" id="deviceInfo"></span>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="connectBtn" type="button">connect weasel</button>
+          <button class="btn" id="demoBtn" type="button">try demo</button>
+          <button class="btn small" id="midiBtn" type="button" title="For firmware that shows up as a USB MIDI device">use usb midi</button>
+          <button class="btn" id="disconnectBtn" type="button" hidden>disconnect</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="module span-6 disabled-zone">
+      <div class="module-head"><h2>MIDI channel</h2><span>receive</span><span class="fill"></span></div>
+      <div class="module-body channel">
+        <label for="channelSelect">midi in channel <span class="dim">&rsaquo; omni* listens on all 16</span></label>
+        <span class="select-wrap">
+          <select class="select" id="channelSelect"></select>
+        </span>
+        <p class="now" id="channelNow" style="margin:0">&nbsp;</p>
+      </div>
+    </section>
+
+    <section class="module span-6 last-in-row">
+      <div class="module-head"><h2>MIDI in</h2><span>monitor</span><span class="fill"></span></div>
+      <div class="module-body monitor">
+        <div class="big" id="monNote">&ndash;</div>
+        <div class="facts">
+          <div><span class="dim">last note</span> <span id="monNoteNum">&ndash;</span></div>
+          <div><span class="dim">channel</span> <span id="monChan">&ndash;</span></div>
+          <div><span class="dim">velocity</span> <span class="velbar"><i id="monVel"></i></span></div>
+          <div><span class="dim">clock</span> <span id="monClock">&ndash;</span></div>
+        </div>
+        <div class="leds">
+          <span><i class="led" id="ledData"></i>data</span>
+          <span><i class="led" id="ledHeld"></i>note held</span>
+          <span><i class="led" id="ledClock"></i>clock</span>
+          <span><i class="led" id="ledSync"></i>sync</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="module span-12 last-in-row disabled-zone">
+      <div class="module-head"><h2>Memory</h2><span>save</span><span class="fill"></span></div>
+      <div class="module-body store">
+        <div>
+          <div class="state"><i class="led" id="dirtyLed"></i><span id="dirtyText">no unsaved changes</span></div>
+          <div class="status" id="status" role="status" style="margin-top:10px"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="saveBtn" type="button">save to weasel</button>
+          <button class="btn" id="undoBtn" type="button">undo change</button>
+          <button class="btn" id="resetBtn" type="button">back to omni</button>
+        </div>
+      </div>
+    </section>
+
+    <details class="more" style="grid-column: span 12">
+      <summary>Can't connect?</summary>
+      <div class="more-body">
+        <div><h3>WEASEL is not in the list</h3>
+          <p>Use Chrome or Edge on a computer and a micro-USB data cable. The firmware has to be 0.2 or later, built with <em>Tools &rsaquo; USB support &rsaquo; CDC</em> so the Seed's USB port shows up as a serial port. Update it with the <a href="./#flash">firmware flasher</a> first.</p></div>
+        <div><h3>"WEASEL did not answer"</h3>
+          <p>Close anything else using the port (Arduino IDE serial monitor, another tab). On Windows only one program can open a serial port at a time.</p></div>
+        <div><h3>Embedded previews</h3>
+          <p>Pages shown inside another site can't use Web Serial or Web MIDI. Open this page in its own tab. <em>Try demo</em> works anywhere.</p></div>
+      </div>
+    </details>
+  </div>
+
+  <footer class="foot">
+    <span>&copy; .axs instruments</span>
+    <span>changes apply live &middot; save keeps them after power-off</span>
+  </footer>
+</div>
+</main>
+
+<script type="module">
+  import { msg, CMD, RPL, MAGIC, OMNI, MIDI_DEFAULTS, encodeMidi, decodeMidi, decodeStatus, checksum, noteName, channelName } from './protocol.js';
+  import { createConnection, keepDemoInLinks } from './app.js';
+
+  const $ = (id) => document.getElementById(id);
+  let settings = { ...MIDI_DEFAULTS };
+  let editSeq = 0;
+  let pending = false;
+  let lastActivity = -1;
+
+  function setStatus(text, kind = '') {
+    $('status').textContent = text;
+    $('status').className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  // ---------- channel drop-down ----------
+  const sel = $('channelSelect');
+  sel.append(new Option('omni*', String(OMNI)));
+  for (let c = 0; c < 16; c++) sel.append(new Option(`channel ${c + 1}`, String(c)));
+
+  function render() {
+    sel.value = String(settings.channel);
+    $('channelNow').textContent = settings.channel === OMNI
+      ? 'WEASEL plays notes from every channel.'
+      : `WEASEL plays notes on channel ${settings.channel + 1} only. Clock and start/stop are always received.`;
+  }
+
+  function setDirty(dirty) {
+    $('dirtyLed').classList.toggle('on', dirty);
+    $('dirtyText').textContent = dirty ? 'unsaved change' : 'no unsaved changes';
+    $('saveBtn').disabled = !dirty || !conn.connected;
+    $('undoBtn').disabled = !dirty || !conn.connected;
+  }
+
+  async function change(patch) {
+    if (!conn.connected) return;
+    settings = { ...settings, ...patch };
+    render();
+    pending = true;
+    const seq = ++editSeq;
+    setDirty(true);
+    try {
+      const reply = decodeMidi(await conn.request(msg(CMD.SET_MIDI, ...encodeMidi(settings)), RPL.MIDI));
+      if (seq === editSeq) { pending = false; settings = reply; render(); }
+    } catch (e) { pending = false; conn.fail(e); }
+  }
+  sel.addEventListener('change', () => change({ channel: Number(sel.value) }));
+
+  async function readSettings() {
+    settings = decodeMidi(await conn.request(msg(CMD.GET_MIDI), RPL.MIDI));
+    render();
+  }
+
+  // ---------- monitor ----------
+  function showStatus(st) {
+    setDirty(st.dirty || pending);
+    if (st.anyNote) {
+      $('monNote').textContent = noteName(st.lastNote);
+      $('monNoteNum').textContent = st.lastNote;
+      $('monChan').textContent = st.lastChannel + 1;
+      $('monVel').style.width = `${Math.round((st.lastVelocity / 127) * 100)}%`;
+    }
+    $('monClock').textContent = st.clockReceiving ? `${st.bpm.toFixed(1)} bpm${st.clockSync ? ', synced' : ''}` : 'none';
+    $('ledHeld').classList.toggle('on', st.noteHeld);
+    $('ledClock').classList.toggle('on', st.clockReceiving);
+    $('ledSync').classList.toggle('on', st.clockSync);
+    const blink = lastActivity >= 0 && st.activity !== lastActivity;
+    $('ledData').classList.toggle('on', blink);
+    $('jackMidi').classList.toggle('lit', blink);
+    lastActivity = st.activity;
+    if (!pending && st.liveSum !== checksum(encodeMidi(settings))) readSettings().catch(() => {});
+  }
+
+  const conn = createConnection({
+    setStatus,
+    onConnect: async (link) => {
+      settings = decodeMidi(await link.request(msg(CMD.GET_MIDI), RPL.MIDI));
+      render();
+      lastActivity = -1;
+    },
+    onStatus: showStatus,
+    onDisconnect: () => {
+      pending = false;
+      for (const id of ['ledData', 'ledHeld', 'ledClock', 'ledSync']) $(id).classList.remove('on');
+      $('jackMidi').classList.remove('lit');
+      setDirty(false);
+    },
+  });
+
+  async function command(frame, okText) {
+    try {
+      showStatus(decodeStatus(await conn.request(frame, RPL.STATUS, 2500)));
+      await readSettings();
+      setStatus(okText, 'ok');
+    } catch (e) { conn.fail(e); }
+  }
+
+  $('saveBtn').addEventListener('click', () => command(msg(CMD.SAVE, ...MAGIC.SAVE), `Saved. WEASEL listens on ${channelName(settings.channel)} after power-off too.`));
+  $('undoBtn').addEventListener('click', () => command(msg(CMD.REVERT), 'Back to the saved channel.'));
+  $('resetBtn').addEventListener('click', () => command(msg(CMD.RESET, ...MAGIC.RESET), 'Back to omni, and saved.'));
+
+  keepDemoInLinks();
+  render();
+  setDirty(false);
+</script>
+</body>
+</html>

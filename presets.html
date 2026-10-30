@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WEASEL Presets | .axs instruments</title>
+  <meta name="description" content="Store and recall the WEASEL synthesiser's panel modes as presets, kept in your browser.">
+  <link rel="preload" href="assets/fonts/caprasimo-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/nanum-gothic-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="assets/axs-logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .connect { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px; align-items: center; }
+    .connect .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .connect .who .readout { font-size: 24px; }
+    .connect .btn-row { justify-content: flex-end; }
+    @media (max-width: 720px) { .connect { grid-template-columns: 1fr; } .connect .btn-row { justify-content: flex-start; } }
+
+    /* the panel modes, laid out in boxed sections like the front panel */
+    .sections { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: 1; }
+    .sect { border-right: var(--rule); border-bottom: var(--rule); display: flex; flex-direction: column; min-width: 0; }
+    .sect:nth-child(4n) { border-right: 0; }
+    .sect:nth-last-child(-n + 4) { border-bottom: 0; }
+    .sect h3 { margin: 0; padding: 5px 8px 4px; font-size: 12px; font-weight: 400; text-transform: uppercase; letter-spacing: .03em; border-bottom: var(--rule); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sect-body { padding: 14px 12px 16px; display: flex; flex-direction: column; gap: 16px; }
+    .sect .opts legend { font-size: 13px; color: var(--dim); }
+    .sect .opt { font-size: 14px; }
+    @media (max-width: 1000px) {
+      .sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sect:nth-child(4n) { border-right: var(--rule); }
+      .sect:nth-child(2n) { border-right: 0; }
+      .sect:nth-last-child(-n + 4) { border-bottom: var(--rule); }
+      .sect:nth-last-child(-n + 2) { border-bottom: 0; }
+    }
+    @media (max-width: 460px) {
+      .sections { grid-template-columns: 1fr; }
+      .sect { border-right: 0 !important; border-bottom: var(--rule) !important; }
+      .sect:last-child { border-bottom: 0 !important; }
+    }
+    .panel-state { display: flex; align-items: center; gap: 8px; }
+
+    /* library */
+    .lib { display: flex; flex-direction: column; gap: 16px; }
+    .store-row { display: flex; gap: 8px; }
+    .store-row .field-text { flex: 1; }
+    .presets { list-style: none; margin: 0; padding: 0; border-top: var(--rule); }
+    .preset { border-bottom: var(--rule); padding: 10px 0 11px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: center; }
+    .preset .led { grid-row: 1; }
+    .preset-name {
+      font: 400 19px/1.15 var(--title); background: none; border: 0; padding: 0; color: var(--silk); text-align: left; cursor: pointer;
+      overflow-wrap: anywhere;
+    }
+    .preset-name:hover { text-decoration: underline; text-underline-offset: 4px; }
+    .preset .meta { grid-column: 2; font-size: 13px; color: var(--dim); }
+    .preset .acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .preset .acts .btn { padding: 5px 9px 4px; font-size: 12px; border-radius: 4px; }
+    .preset .rename { grid-column: 2; display: flex; gap: 6px; }
+    .preset .rename .field-text { flex: 1; padding: 5px 8px 4px; }
+    .preset.builtin .preset-name { font-family: var(--label); font-size: 15px; font-weight: 700; }
+    .empty { font-size: 14px; color: var(--dim); padding: 12px 0; border-bottom: var(--rule); margin: 0; }
+    .lib-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .lib-foot .count { margin-left: auto; font-size: 13px; color: var(--dim); }
+    /* on narrow screens the library comes before the long list of modes */
+    @media (max-width: 860px) { #connModule { order: -2; } #libModule { order: -1; } }
+  </style>
+</head>
+<body class="offline">
+<main class="panel">
+<div class="panel-inner">
+
+  <div class="edge" aria-hidden="true">
+    <span class="jack" id="jackUsb">usb</span>
+    <span class="push dim" id="edgeInfo">not connected</span>
+  </div>
+
+  <header class="plate">
+    <h1 class="wordmark"><a href="./" data-tool>WEASEL</a></h1>
+    <img class="mascot" src="assets/axs-logo.svg" alt="" width="26" height="40">
+    <p class="plate-sub">Digital West Coast Synth<br>Inspired by the MUSIC EASEL
+      <small>presets</small></p>
+  </header>
+
+  <nav class="tabs" aria-label="Tools">
+    <a href="editor.html" data-tool>MIDI settings</a>
+    <a href="presets.html" data-tool aria-current="page">Presets</a>
+    <a href="./#flash" data-tool>Update firmware</a>
+    <span class="fill"></span>
+  </nav>
+
+  <div class="rack">
+
+    <section class="module span-12 last-in-row" id="connModule">
+      <div class="module-head"><h2>Connection</h2><span id="linkKind">usb serial</span><span class="fill"></span></div>
+      <div class="module-body connect">
+        <div class="who">
+          <span class="led" id="linkLed"></span>
+          <span class="readout" id="deviceName">not connected</span>
+          <span class="dim" id="deviceInfo"></span>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="connectBtn" type="button">connect weasel</button>
+          <button class="btn" id="demoBtn" type="button">try demo</button>
+          <button class="btn small" id="midiBtn" type="button" title="For firmware that shows up as a USB MIDI device">use usb midi</button>
+          <button class="btn" id="disconnectBtn" type="button" hidden>disconnect</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="module span-8" aria-labelledby="panelHead">
+      <div class="module-head"><h2 id="panelHead">Panel modes</h2><span class="panel-state"><i class="led" id="panelLed"></i><span id="panelMode">draft</span></span><span class="fill"></span></div>
+      <div class="sections" id="sections"></div>
+    </section>
+
+    <section class="module span-4 last-in-row" id="libModule">
+      <div class="module-head"><h2>Presets</h2><span>this browser</span><span class="fill"></span></div>
+      <div class="module-body lib">
+        <form class="store-row" id="storeForm">
+          <label class="sr" for="storeName" hidden>Preset name</label>
+          <input class="field-text" id="storeName" type="text" maxlength="40" placeholder="name the panel as it is now" autocomplete="off">
+          <button class="btn primary" type="submit">store</button>
+        </form>
+        <ul class="presets" id="presetList"></ul>
+        <div class="lib-foot">
+          <button class="btn small" id="exportBtn" type="button">export (.json)</button>
+          <label class="btn small" for="importInput" tabindex="0">import</label>
+          <input type="file" id="importInput" accept=".json,application/json" hidden>
+          <span class="count" id="count"></span>
+        </div>
+        <div class="status" id="status" role="status"></div>
+      </div>
+    </section>
+
+    <section class="module span-12 last-in-row">
+      <div class="module-head"><h2>Information</h2><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="info">
+          <p class="head">what a preset holds</p>
+          <ul>
+            <li>every mode the panel buttons step through &rsaquo; trigger selects, stages, envelope mode, waveforms, fm / am, polarity, midi, lo pass gate modes and clock mode</li>
+            <li>not the virtual patch bay, the knobs and faders, or the sequencer on / off switches &rsaquo; those stay as they are set on the panel</li>
+          </ul>
+          <p class="head">how it works</p>
+          <ul>
+            <li>click a mode &rsaquo; WEASEL changes straight away, like pressing its button</li>
+            <li>click a preset's name &rsaquo; recalls it; a lit dot marks the preset that matches the panel</li>
+            <li>presets are kept in this browser &rsaquo; export them to back up or move to another computer</li>
+          </ul>
+          <p>'*' next to a label is the mode WEASEL starts in</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <span>&copy; .axs instruments</span>
+    <span id="footNote">presets are stored in this browser only</span>
+  </footer>
+</div>
+</main>
+
+<script type="module">
+  import { msg, CMD, RPL, PANEL_SECTIONS, PANEL_FIELDS, PANEL_DEFAULTS, encodePanel, decodePanel, checksum } from './protocol.js';
+  import { createConnection, keepDemoInLinks, isDemo } from './app.js';
+
+  const $ = (id) => document.getElementById(id);
+  const STORE_KEY = isDemo() ? 'weasel.presets.demo' : 'weasel.presets.v1';
+
+  let panel = { ...PANEL_DEFAULTS };
+  let pending = false;
+  let editSeq = 0;
+  let presets = [];
+  let renaming = null;
+  let confirmingDelete = null;
+
+  function setStatus(text, kind = '') {
+    $('status').textContent = text;
+    $('status').className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  // ---------- library storage (this browser) ----------
+  const EXAMPLES = [
+    { name: 'Bongo sequence', panel: { ...PANEL_DEFAULTS, seqStages: 2, envMode: 0, modWave: 2, lpg1Mode: 1, lpg2Mode: 0 } },
+    { name: 'Keys from MIDI', panel: { ...PANEL_DEFAULTS, seqTrigger: 2, envTrigger: 2, envMode: 1, pulsarTrigger: 1, randomTrigger: 2, midiFollow: 1 } },
+    { name: 'Drone cycler', panel: { ...PANEL_DEFAULTS, envMode: 2, pulsarTrigger: 2, randomTrigger: 1, modWave: 3, modType: 1, complexWave: 2, polarity: 1 } },
+  ];
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.presets)) return data.presets.map(clean).filter(Boolean);
+      }
+    } catch (e) { /* storage blocked or corrupt: start empty */ }
+    // The demo starts with a few marked examples so there is something to recall.
+    return isDemo() ? EXAMPLES.map((p, i) => ({ ...p, id: 'ex' + i, name: p.name + ' (example)', updated: null })) : [];
+  }
+
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  // Panels are stored by option name ("midi", "square"), so files stay readable
+  // and keep working if the wire order ever changes.
+  function toNames(p) {
+    return Object.fromEntries(PANEL_FIELDS.map((f) => [f.key, f.options[p[f.key]]]));
+  }
+  function fromNames(n) {
+    const out = { ...PANEL_DEFAULTS };
+    for (const f of PANEL_FIELDS) {
+      const v = n && n[f.key];
+      const i = typeof v === 'number' ? v : f.options.indexOf(String(v));
+      if (i >= 0 && i < f.options.length) out[f.key] = i;
+    }
+    return out;
+  }
+  function clean(p) {
+    if (!p || typeof p !== 'object') return null;
+    const name = String(p.name || '').trim().slice(0, 40) || 'untitled';
+    return { id: p.id || newId(), name, panel: fromNames(p.panel), updated: p.updated || null };
+  }
+  const forStorage = (p) => ({ id: p.id, name: p.name, panel: toNames(p.panel), updated: p.updated });
+  // localStorage keeps option names; in memory we work with indexes.
+  function saveLibrary() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ device: 'WEASEL', kind: 'presets', version: 1, presets: presets.map(forStorage) }));
+    } catch (e) {
+      setStatus('This browser would not save the library (private window or storage blocked). Export it to keep your presets.', 'error');
+    }
+  }
+
+  // ---------- panel modes ----------
+  function buildSections() {
+    for (const sec of PANEL_SECTIONS) {
+      const box = document.createElement('div');
+      box.className = 'sect';
+      const h = document.createElement('h3');
+      h.textContent = sec.title;
+      const body = document.createElement('div');
+      body.className = 'sect-body';
+      for (const f of sec.fields) {
+        const fs = document.createElement('fieldset');
+        fs.className = 'opts';
+        const lg = document.createElement('legend');
+        lg.textContent = f.label;
+        fs.append(lg);
+        f.options.forEach((name, i) => {
+          const l = document.createElement('label');
+          l.className = 'opt';
+          l.innerHTML = '<input type="radio"><span class="dot"></span><span class="txt"></span>';
+          const input = l.querySelector('input');
+          input.name = 'p-' + f.key;
+          input.id = `p-${f.key}-${i}`;
+          input.value = String(i);
+          input.addEventListener('change', () => setMode(f.key, i));
+          l.querySelector('.txt').textContent = name + (i === f.def ? '*' : '');
+          fs.append(l);
+        });
+        body.append(fs);
+      }
+      box.append(h, body);
+      $('sections').append(box);
+    }
+  }
+
+  const same = (a, b) => PANEL_FIELDS.every((f) => a[f.key] === b[f.key]);
+
+  function renderPanel() {
+    for (const f of PANEL_FIELDS) {
+      const r = document.getElementById(`p-${f.key}-${panel[f.key]}`);
+      if (r) r.checked = true;
+    }
+    $('panelMode').textContent = conn.connected ? 'live on weasel' : 'draft, not connected';
+    $('panelLed').classList.toggle('on', conn.connected);
+    renderList();
+  }
+
+  async function sendPanel() {
+    if (!conn.connected) return;
+    pending = true;
+    const seq = ++editSeq;
+    try {
+      const reply = decodePanel(await conn.request(msg(CMD.SET_PANEL, ...encodePanel(panel)), RPL.PANEL));
+      if (seq === editSeq) { pending = false; panel = reply; renderPanel(); }
+    } catch (e) { pending = false; conn.fail(e); }
+  }
+
+  function setMode(key, i) {
+    panel = { ...panel, [key]: i };
+    renderPanel();
+    sendPanel();
+  }
+
+  async function readPanel(note) {
+    panel = decodePanel(await conn.request(msg(CMD.GET_PANEL), RPL.PANEL));
+    renderPanel();
+    if (note) setStatus(note);
+  }
+
+  // ---------- library list ----------
+  const BUILTIN = { id: 'power-on', name: 'power-on modes', panel: PANEL_DEFAULTS, builtin: true };
+
+  function when(t) {
+    if (!t) return 'example';
+    const d = new Date(t);
+    return 'stored ' + d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function renderList() {
+    const ul = $('presetList');
+    ul.textContent = '';
+    for (const p of [BUILTIN, ...presets]) {
+      const li = document.createElement('li');
+      li.className = 'preset' + (p.builtin ? ' builtin' : '');
+      const led = document.createElement('i');
+      led.className = 'led' + (same(p.panel, panel) ? ' on' : '');
+      led.title = same(p.panel, panel) ? 'matches the panel' : '';
+      li.append(led);
+
+      if (renaming === p.id) {
+        const f = document.createElement('form');
+        f.className = 'rename';
+        f.innerHTML = '<input class="field-text" type="text" maxlength="40"><button class="btn small" type="submit">ok</button>';
+        const input = f.querySelector('input');
+        input.value = p.name;
+        input.id = 'rename-' + p.id;
+        input.setAttribute('aria-label', 'New name');
+        f.addEventListener('submit', (e) => {
+          e.preventDefault();
+          p.name = input.value.trim().slice(0, 40) || p.name;
+          renaming = null;
+          saveLibrary();
+          renderList();
+        });
+        input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { renaming = null; renderList(); } });
+        li.append(f);
+        setTimeout(() => { input.focus(); input.select(); });
+      } else {
+        const name = document.createElement('button');
+        name.type = 'button';
+        name.className = 'preset-name';
+        name.textContent = p.name;
+        name.title = 'Recall';
+        name.addEventListener('click', () => recall(p));
+        li.append(name);
+      }
+
+      const meta = document.createElement('span');
+      meta.className = 'meta';
+      meta.textContent = p.builtin ? 'what WEASEL starts with' : when(p.updated);
+      li.append(meta);
+
+      if (!p.builtin && renaming !== p.id) {
+        const acts = document.createElement('div');
+        acts.className = 'acts';
+        const act = (label, fn, aria) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'btn'; b.textContent = label;
+          if (aria) b.setAttribute('aria-label', aria);
+          b.addEventListener('click', fn);
+          acts.append(b);
+        };
+        if (confirmingDelete === p.id) {
+          act('delete it', () => remove(p), `Confirm deleting ${p.name}`);
+          act('keep', () => { confirmingDelete = null; renderList(); });
+        } else {
+          act('recall', () => recall(p), `Recall ${p.name}`);
+          act('update', () => update(p), `Replace ${p.name} with the panel as it is now`);
+          act('rename', () => { renaming = p.id; confirmingDelete = null; renderList(); }, `Rename ${p.name}`);
+          act('delete', () => { confirmingDelete = p.id; renaming = null; renderList(); }, `Delete ${p.name}`);
+        }
+        li.append(acts);
+      }
+      ul.append(li);
+    }
+    if (!presets.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No presets yet. Set the panel the way you like it, name it above and store it.';
+      ul.append(li);
+    }
+    $('count').textContent = `${presets.length} preset${presets.length === 1 ? '' : 's'}`;
+  }
+
+  function recall(p) {
+    panel = { ...p.panel };
+    renderPanel();
+    if (conn.connected) { sendPanel(); setStatus(`Recalled ${p.name}.`, 'ok'); }
+    else setStatus(`Loaded ${p.name} as the draft. Connect WEASEL to send it.`);
+  }
+
+  function update(p) {
+    p.panel = { ...panel };
+    p.updated = Date.now();
+    saveLibrary();
+    renderList();
+    setStatus(`${p.name} now holds the panel as it is.`, 'ok');
+  }
+
+  function remove(p) {
+    presets = presets.filter((x) => x !== p);
+    confirmingDelete = null;
+    saveLibrary();
+    renderList();
+    setStatus(`Deleted ${p.name}.`);
+  }
+
+  $('storeForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('storeName').value.trim().slice(0, 40) || `preset ${presets.length + 1}`;
+    presets.push({ id: newId(), name, panel: { ...panel }, updated: Date.now() });
+    $('storeName').value = '';
+    saveLibrary();
+    renderList();
+    setStatus(`Stored ${name}.`, 'ok');
+  });
+
+  // ---------- export / import ----------
+  $('exportBtn').addEventListener('click', () => {
+    const data = { device: 'WEASEL', kind: 'presets', version: 1, exported: new Date().toISOString(), presets: presets.map(({ name, panel: p }) => ({ name, panel: toNames(p) })) };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `weasel-presets-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  $('importInput').addEventListener('change', async () => {
+    const file = $('importInput').files[0];
+    $('importInput').value = '';
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const list = data && data.device === 'WEASEL' ? (Array.isArray(data.presets) ? data.presets : data.panel ? [data] : null) : null;
+      if (!list) throw new Error('That file is not a WEASEL preset file.');
+      let added = 0;
+      for (const raw of list) {
+        const p = clean(raw);
+        if (!p) continue;
+        if (presets.some((x) => x.name === p.name && same(x.panel, p.panel))) continue;   // already have it
+        presets.push({ ...p, id: newId(), updated: Date.now() });
+        added++;
+      }
+      saveLibrary();
+      renderList();
+      setStatus(added ? `Imported ${added} preset${added === 1 ? '' : 's'} from ${file.name}.` : 'Nothing new in that file.', 'ok');
+    } catch (e) {
+      setStatus(e instanceof SyntaxError ? 'That file is not valid JSON.' : e.message, 'error');
+    }
+  });
+  document.querySelector('label[for="importInput"]').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('importInput').click(); }
+  });
+
+  // ---------- connection ----------
+  const conn = createConnection({
+    setStatus,
+    onConnect: async (link) => {
+      panel = decodePanel(await link.request(msg(CMD.GET_PANEL), RPL.PANEL));
+    },
+    onStatus: (st) => {
+      renderPanelIfConnectedChanged();
+      // A button pressed on WEASEL itself: pick it up.
+      if (!pending && st.panelSum !== checksum(encodePanel(panel))) readPanel('Panel changed on WEASEL.').catch(() => {});
+    },
+    onDisconnect: () => { pending = false; renderPanel(); },
+  });
+
+  let shownConnected = null;
+  function renderPanelIfConnectedChanged() {
+    if (shownConnected !== conn.connected) { shownConnected = conn.connected; renderPanel(); }
+  }
+
+  presets = load();
+  buildSections();
+  keepDemoInLinks();
+  renderPanel();
+</script>
+</body>
+</html>

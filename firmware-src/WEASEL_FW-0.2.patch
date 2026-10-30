@@ -1,0 +1,230 @@
+--- /home/claude/joebmz98/weasel/src/WEASEL_FW/WEASEL_FW.ino	2026-10-29 22:11:12.889857879 +0000
++++ WEASEL_FW.ino	2026-10-29 22:41:16.316066126 +0000
+@@ -2,7 +2,7 @@
+ // ==== WEASEL ========== //
+ // Buchla Music Easel     //
+ // Inspired Digital Synth //
+-// firmware version 0.1   //
++// firmware version 0.2   //
+ // Hardware Version: 1.0  //
+ // ********************** //
+ // designed by            //
+@@ -45,6 +45,7 @@
+ #include <MIDI.h>          // MIDI
+ #include <CpuLoadMeter.h>  // CPU LOAD METER
+ #include "wavefolder.h"    // EXTRACTED FROM DAISYSP
++#include "WeaselEditor.h"  // WEB PAGES: MIDI CHANNEL + PANEL MODES OVER USB SERIAL
+ #include <math.h>
+ 
+ using namespace daisysp;
+@@ -155,7 +156,7 @@
+ bool complexOscInverted = false;      // TOGGLE POLARITY
+ bool complexOscMidiEnabled = false;   // TOGGLE MIDI
+ float complexOscMorphMix;             // COMPLEX OSC TIMBRE AMOUNT
+-int morphWaveformIndex = 0;           // 0 = SAW, 1 = SQUARE, 2 = TRIANGLE
++int morphWaveformIndex = 0;           // 0 = SAW, 1 = SQUARE, 2 = TRIANGLE (panel order)
+ float complexOscSigLevel = 0.0f;      // LPG CONTROL
+ 
+ // -- MODULATION
+@@ -168,7 +169,7 @@
+ float modulationOscModCoeffDepth = 0.0f;  // MODULATION MOD DEPTH
+ bool useAmplitudeMod = false;             // False = FM, True = AM
+ bool modulationMidiEnabled = false;       // TOGGLE MIDI
+-int modWaveformIndex = 0;                 // 0: SIN, 1: TRI, 2: SQUARE, 3: SAW
++int modWaveformIndex = 0;                 // 0: SIN, 1: TRI, 2: SAW, 3: SQUARE
+ float modOscSigLevel = 0.0f;              // LPG CONTROL
+ 
+ // -- LPG --
+@@ -243,6 +244,8 @@
+ #define MIDI_RX_PIN 14  // USART1 Rx (Digital pin 30)
+   // MIDI OBJECT
+ MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
++// -- WEB EDITOR (MIDI CHANNEL + PANEL MODES) --
++weasel::Editor editor;
+ // --
+ bool quantizeToMidi = false;       // Enable/disable MIDI quantization mode
+ float baseFreqComplex = 261.63f;   // Base frequency for complex osc (C4 = 261.63Hz)
+@@ -346,6 +349,24 @@
+   return powf(2.0f, semitones / 12.0f);
+ }
+ 
++// -- WAVEFORM SELECTION (shared by the panel buttons and the web presets) --
++void setModWaveform(int index) {
++  modWaveformIndex = index;
++  if (index == 0) modulationOsc.SetWaveform(modulationOsc.WAVE_SIN);
++  else if (index == 1) modulationOsc.SetWaveform(modulationOsc.WAVE_TRI);
++  else if (index == 2) modulationOsc.SetWaveform(modulationOsc.WAVE_SAW);
++  else modulationOsc.SetWaveform(modulationOsc.WAVE_SQUARE);
++}
++
++// Panel order: saw* -> square -> triangle. (0.1 started on saw but its first
++// press went to triangle and the second back to saw.)
++void setComplexWaveform(int index) {
++  morphWaveformIndex = index;
++  if (index == 0) complexOscMorph.SetWaveform(complexOscMorph.WAVE_SAW);
++  else if (index == 1) complexOscMorph.SetWaveform(complexOscMorph.WAVE_SQUARE);
++  else complexOscMorph.SetWaveform(complexOscMorph.WAVE_TRI);
++}
++
+ // SVF state reset function
+ void resetSvfFilters() {
+   lpGateFilter1.Init(sampleRate);
+@@ -697,16 +718,7 @@
+         else if (col == 2 && row == 1) {
+           // MOD_WAVE_CYCLE - Cycles modulation oscillator waveform: SIN -> TRI -> SAW -> SQUARE
+           if (matrix2CurrentStates[col][row] && !matrix2PreviousStates[col][row]) {
+-            modWaveformIndex = (modWaveformIndex + 1) % 4;
+-            if (modWaveformIndex == 0) {
+-              modulationOsc.SetWaveform(modulationOsc.WAVE_SIN);
+-            } else if (modWaveformIndex == 1) {
+-              modulationOsc.SetWaveform(modulationOsc.WAVE_TRI);
+-            } else if (modWaveformIndex == 2) {
+-              modulationOsc.SetWaveform(modulationOsc.WAVE_SAW);
+-            } else if (modWaveformIndex == 3) {
+-              modulationOsc.SetWaveform(modulationOsc.WAVE_SQUARE);
+-            }
++            setModWaveform((modWaveformIndex + 1) % 4);
+           }
+         }
+ 
+@@ -738,16 +750,9 @@
+         }
+ 
+         else if (col == 2 && row == 2) {
+-          // COMPLEX_WAVE_CYCLE - Cycles complex oscillator morph waveform: TRI -> SAW -> SQUARE
++          // COMPLEX_WAVE_CYCLE - Cycles complex oscillator morph waveform: SAW -> SQUARE -> TRIANGLE
+           if (matrix2CurrentStates[col][row] && !matrix2PreviousStates[col][row]) {
+-            morphWaveformIndex = (morphWaveformIndex + 1) % 3;
+-            if (morphWaveformIndex == 0) {
+-              complexOscMorph.SetWaveform(complexOscMorph.WAVE_TRI);
+-            } else if (morphWaveformIndex == 1) {
+-              complexOscMorph.SetWaveform(complexOscMorph.WAVE_SAW);
+-            } else if (morphWaveformIndex == 2) {
+-              complexOscMorph.SetWaveform(complexOscMorph.WAVE_SQUARE);
+-            }
++            setComplexWaveform((morphWaveformIndex + 1) % 3);
+           }
+         }
+ 
+@@ -1317,11 +1322,17 @@
+   MIDI.setHandleStart(handleMidiStart);
+   MIDI.setHandleStop(handleMidiStop);
+ 
+-  MIDI.begin(MIDI_CHANNEL_OMNI);
++  MIDI.begin(MIDI_CHANNEL_OMNI);  // channel filtering is done in the handlers (editor setting)
+   MIDI.turnThruOff();
+   currentMidiNote = 60;
+   midiTriggerPending = false;
+ 
++  // -- WEB EDITOR: MIDI channel (QSPI), panel modes, restart into DFU --
++  editor.onBootloader = []() { hw.ResetToBootloader(); };
++  editor.readPanel = readPanelModes;
++  editor.writePanel = writePanelModes;
++  editor.begin();
++
+   //Serial.println("=============================================");
+   //Serial.println("MIDI initialized with pin 30 (Digital pin 30)");
+   //Serial.println("=============================================");
+@@ -1337,6 +1348,13 @@
+ 
+   checkMidiClockActivity();  // ADD THIS LINE
+ 
++  // WEB EDITOR: report MIDI state, answer requests from the USB port
++  editor.live.noteHeld = midiNoteHeld;
++  editor.live.clockReceiving = midiClockActive;
++  editor.live.clockSync = midiClockSync;
++  editor.live.bpm = midiClockActive ? midiTempo : 0.0f;
++  editor.poll();
++
+ 
+   // READ BUTTON MATRICES
+   if (millis() - lastMatrixRead > MATRIX_READ_INTERVAL) {
+@@ -1520,7 +1538,9 @@
+ 
+ // -- MIDI NOTE HANDLING
+ void handleNoteOn(byte channel, byte note, byte velocity) {
++  if (!editor.acceptsChannel(channel)) return;  // MIDI receive channel (web editor)
+   if (velocity > 0) {
++    editor.noteIn(channel, note, velocity);
+     currentMidiNote = note;
+     midiTriggerPending = true;
+     midiTriggerCounter = MIDI_TRIGGER_HOLDOFF;
+@@ -1535,6 +1555,8 @@
+ }
+ 
+ void handleNoteOff(byte channel, byte note, byte velocity) {
++  if (!editor.acceptsChannel(channel)) return;
++  editor.activity();
+   midiNoteHeld = false;
+ }
+ 
+@@ -1610,3 +1632,69 @@
+   seqSampleCounter = 0;
+   midiClockTicks = 0;
+ }
++
++// -- PANEL MODES FOR THE WEB PRESETS PAGE --
++// Byte order and meaning: weasel::PanelField in WeaselEditor.h (PANEL_FIELDS in
++// protocol.js). Every value is the position in the order the button steps through.
++// Not included: the virtual patch bay, and the sequencer step on/off switches
++// (latching switches, so the panel always shows their real position).
++void readPanelModes(uint8_t *out) {
++  out[weasel::P_SEQ_TRIGGER] = (uint8_t)currentSeqTriggerMode;
++  out[weasel::P_SEQ_STAGES] = (uint8_t)(5 - seqMaxSteps);
++  out[weasel::P_ENV_TRIGGER] = (uint8_t)currentEnvTriggerMode;
++  out[weasel::P_ENV_MODE] = (uint8_t)currentEnvMode;
++  out[weasel::P_PULSAR_TRIGGER] = (uint8_t)currentPulsarMode;
++  out[weasel::P_RANDOM_TRIGGER] = (uint8_t)currentRandomMode;
++  out[weasel::P_MOD_WAVE] = (uint8_t)modWaveformIndex;
++  out[weasel::P_MOD_TYPE] = useAmplitudeMod ? 1 : 0;
++  out[weasel::P_LPG2_MODE] = (uint8_t)modOscLpgMode;
++  out[weasel::P_COMPLEX_WAVE] = (uint8_t)morphWaveformIndex;
++  out[weasel::P_POLARITY] = complexOscInverted ? 1 : 0;
++  out[weasel::P_LPG1_MODE] = (uint8_t)foldedLpgMode;
++  out[weasel::P_MIDI_FOLLOW] = quantizeToMidi ? 1 : 0;
++  out[weasel::P_CLOCK_MODE] = midiClockSync ? 1 : 0;
++}
++
++// Same effect as pressing the buttons until each mode is reached.
++void writePanelModes(const uint8_t *in) {
++  currentSeqTriggerMode = static_cast<SeqTriggerMode>(in[weasel::P_SEQ_TRIGGER]);
++
++  int steps = 5 - in[weasel::P_SEQ_STAGES];
++  if (steps != seqMaxSteps) {
++    seqMaxSteps = steps;
++    seqCurrentStep %= seqMaxSteps;
++  }
++
++  currentEnvTriggerMode = static_cast<EnvTriggerMode>(in[weasel::P_ENV_TRIGGER]);
++  EnvelopeMode envMode = static_cast<EnvelopeMode>(in[weasel::P_ENV_MODE]);
++  if (envMode != currentEnvMode) {
++    currentEnvMode = envMode;
++    if (currentEnvMode == ENV_MODE_OSCILLATE) envRetriggerFlag = false;
++  }
++
++  currentPulsarMode = static_cast<PulsarMode>(in[weasel::P_PULSAR_TRIGGER]);
++  currentRandomMode = static_cast<RandomMode>(in[weasel::P_RANDOM_TRIGGER]);
++
++  if (in[weasel::P_MOD_WAVE] != modWaveformIndex) setModWaveform(in[weasel::P_MOD_WAVE]);
++  useAmplitudeMod = in[weasel::P_MOD_TYPE] != 0;
++  modOscLpgMode = static_cast<LpgMode>(in[weasel::P_LPG2_MODE]);
++
++  if (in[weasel::P_COMPLEX_WAVE] != morphWaveformIndex) setComplexWaveform(in[weasel::P_COMPLEX_WAVE]);
++  complexOscInverted = in[weasel::P_POLARITY] != 0;
++  foldedLpgMode = static_cast<LpgMode>(in[weasel::P_LPG1_MODE]);
++
++  bool follow = in[weasel::P_MIDI_FOLLOW] != 0;
++  if (follow && !quantizeToMidi) midiNoteReceived = false;
++  quantizeToMidi = follow;
++
++  bool sync = in[weasel::P_CLOCK_MODE] != 0;
++  if (sync && !midiClockSync) {
++    seqCurrentStep = 0;
++    seqSampleCounter = 0;
++    midiClockTicks = 0;
++    midiClockSync = true;
++    updateClockDivision();
++  } else {
++    midiClockSync = sync;
++  }
++}

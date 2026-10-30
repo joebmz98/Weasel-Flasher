@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WEASEL Tools | .axs instruments</title>
+  <meta name="description" content="Firmware updates and MIDI settings for the WEASEL digital west coast synthesiser, over USB.">
+  <link rel="preload" href="assets/fonts/caprasimo-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/nanum-gothic-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="assets/axs-logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    /* tool chooser */
+    .tools { display: flex; flex-direction: column; }
+    .tool {
+      display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; align-items: center;
+      padding: 20px 18px; text-decoration: none; border-bottom: var(--rule);
+    }
+    .tool:last-child { border-bottom: 0; }
+    .tool .key { --size: 54px; pointer-events: none; }
+    .tool:hover .key, .tool:focus-visible .key { background: var(--silk); box-shadow: 0 0 0 2px var(--mask), 0 0 0 3px var(--silk), 0 0 14px rgba(255,255,255,.45); }
+    .tool-name { font-family: var(--title); font-size: 28px; line-height: 1.05; display: block; }
+    .tool-desc { display: block; font-size: 15px; margin-top: 6px; }
+    .tool-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .tool-chev { font-size: 30px; line-height: 1; transition: transform .15s; }
+    .tool:hover .tool-chev { transform: translateX(4px); }
+    .key svg { width: 26px; height: 26px; }
+    @media (max-width: 520px) { .tool { grid-template-columns: minmax(0, 1fr) auto; } .tool .key { display: none; } }
+
+    .intro { display: grid; gap: 18px; }
+
+    /* flasher */
+    .flash-body { display: grid; gap: 22px; }
+    .src-file { display: grid; gap: 10px; padding-left: 22px; }
+    .addr-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    #addrInput { width: 140px; }
+    .image-info { font-family: var(--mono); font-size: 14px; min-height: 1.4em; }
+    .image-info .warn { display: block; margin-top: 8px; font-family: var(--label); font-size: 14px; background: var(--silk); color: var(--mask); border-radius: 6px; padding: 8px 11px; font-weight: 700; }
+    .flash-row { display: grid; justify-items: center; gap: 14px; padding: 8px 0 4px; text-align: center; }
+    .flash-row .status { max-width: 56ch; }
+    .log-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .opt-row { display: flex; gap: 10px 26px; flex-wrap: wrap; }
+    .or { display: grid; gap: 10px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<main class="panel">
+<div class="panel-inner">
+
+  <div class="edge" aria-hidden="true">
+    <span class="jack">usb</span>
+    <span class="jack">boot</span>
+    <span class="jack">reset</span>
+    <span class="push dim" id="edgeVersion">firmware &middot; loading</span>
+  </div>
+
+  <header class="plate">
+    <h1 class="wordmark"><a href="./" id="homeLink">WEASEL</a></h1>
+    <img class="mascot" src="assets/axs-logo.svg" alt="" width="26" height="40">
+    <p class="plate-sub">Digital West Coast Synth<br>Inspired by the MUSIC EASEL
+      <small id="subtitle">firmware updates and settings over usb</small></p>
+  </header>
+
+  <!-- ===================== start: choose a tool ===================== -->
+  <div class="rack" id="chooser">
+    <section class="module span-5">
+      <div class="module-head"><h2>Information</h2><span class="fill"></span></div>
+      <div class="module-body intro">
+        <div class="info">
+          <p class="head">what these do</p>
+          <ul>
+            <li>update firmware &rsaquo; installs a new WEASEL release on the Daisy Seed over usb</li>
+            <li>midi settings &rsaquo; the midi in channel, plus a monitor of incoming notes and clock</li>
+            <li>presets &rsaquo; store and recall the panel's button modes while WEASEL plays</li>
+          </ul>
+          <p class="head">you need</p>
+          <ul>
+            <li>chrome or edge on a computer</li>
+            <li>a micro-usb data cable</li>
+          </ul>
+        </div>
+        <img class="art" src="assets/weasel-art.svg" alt="The WEASEL mascot, a weasel in goggles playing a synth" width="240" height="240">
+      </div>
+    </section>
+
+    <nav class="module span-7 last-in-row" aria-label="Choose a tool">
+      <div class="module-head"><h2>Tools</h2><span>choose</span><span class="fill"></span></div>
+      <div class="tools">
+        <a class="tool" href="#flash">
+          <span class="key" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>
+          </span>
+          <span>
+            <span class="tool-name">update firmware</span>
+            <span class="tool-desc">Install the latest WEASEL release, or your own build, with the Daisy Seed in DFU&nbsp;mode.</span>
+            <span class="tool-meta"><span class="label-box">webusb</span><span class="label-box" id="chooserVersion">latest release</span></span>
+          </span>
+          <span class="tool-chev" aria-hidden="true">&rsaquo;</span>
+        </a>
+        <a class="tool" href="editor.html">
+          <span class="key" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 4v3M5 9l2.5 1.5M19 9l-2.5 1.5"/></svg>
+          </span>
+          <span>
+            <span class="tool-name">midi settings</span>
+            <span class="tool-desc">Choose the MIDI in channel and watch the notes and clock WEASEL&nbsp;receives.</span>
+            <span class="tool-meta"><span class="label-box">usb serial</span><span class="label-box">firmware 0.2 or later</span></span>
+          </span>
+          <span class="tool-chev" aria-hidden="true">&rsaquo;</span>
+        </a>
+        <a class="tool" href="presets.html">
+          <span class="key" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/><circle cx="18.5" cy="18" r="1.6" fill="currentColor"/></svg>
+          </span>
+          <span>
+            <span class="tool-name">presets</span>
+            <span class="tool-desc">Store the panel's modes (waveforms, trigger selects, envelope and lo pass gate modes) and recall them in one&nbsp;click.</span>
+            <span class="tool-meta"><span class="label-box">usb serial</span><span class="label-box">kept in this browser</span></span>
+          </span>
+          <span class="tool-chev" aria-hidden="true">&rsaquo;</span>
+        </a>
+      </div>
+    </nav>
+  </div>
+
+  <!-- ===================== flasher ===================== -->
+  <div class="rack" id="flasherView" hidden>
+    <section class="module span-5">
+      <div class="module-head"><h2>Information</h2><span>how to flash</span><span class="fill"></span></div>
+      <div class="module-body">
+        <a class="back" href="./" id="backLink">all tools</a>
+        <div class="info" style="margin-top:14px">
+          <ol>
+            <li>Connect the Daisy Seed's micro-USB port straight to the computer (not a hub) with a data cable.</li>
+            <li>Put the Seed in DFU mode: <strong>hold BOOT</strong>, press and release <strong>RESET</strong>, then let go of BOOT. The synth goes&nbsp;silent.</li>
+            <li>Choose the firmware, click <strong>flash firmware</strong> and pick <strong>DFU in FS Mode</strong> in the&nbsp;popup.</li>
+            <li>Wait for <strong>done</strong>. WEASEL restarts by itself; if not, press RESET&nbsp;once.</li>
+          </ol>
+        </div>
+        <div class="or">
+          <p class="lbl" style="margin:0">or, with firmware 0.2 or later running, skip the buttons:</p>
+          <div class="btn-row">
+            <button class="btn" id="dfuOverUsbBtn" type="button">restart weasel into dfu mode</button>
+          </div>
+          <p class="dim" style="margin:0;font-size:14px">Pick WEASEL's USB serial port in the popup. Your MIDI settings are kept; they live in the Seed's QSPI flash, which flashing never&nbsp;touches.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="module span-7 last-in-row">
+      <div class="module-head"><h2>Firmware update</h2><span>dfu</span><span id="chipLabel">stm32h750</span><span class="fill"></span></div>
+      <div class="module-body flash-body">
+        <fieldset class="opts" id="sourceOpts">
+          <legend class="lbl">firmware</legend>
+          <label class="opt"><input type="radio" name="source" value="release" checked><span class="dot"></span><span class="txt" id="releaseLabel">latest release*</span></label>
+          <label class="opt"><input type="radio" name="source" value="custom"><span class="dot"></span><span class="txt">custom file (.hex or .bin)</span></label>
+        </fieldset>
+        <div class="src-file" id="customFields" hidden>
+          <input type="file" id="fileInput" accept=".hex,.bin,.ihex">
+          <div class="addr-row" id="addrRow" hidden>
+            <label class="lbl" for="addrInput">.bin start address</label>
+            <input class="field" type="text" id="addrInput" value="0x08000000" spellcheck="false">
+          </div>
+          <p class="dim" style="margin:0;font-size:14px">Arduino IDE: <em>Sketch &rsaquo; Export Compiled Binary</em> with the Daisy Seed board selected. Builds for internal flash only (up to 128&nbsp;KB).</p>
+        </div>
+        <div class="image-info" id="imageInfo"></div>
+
+        <div class="opt-row">
+          <label class="check"><input type="checkbox" id="verifyOpt" checked> verify after writing</label>
+          <label class="check"><input type="checkbox" id="runOpt" checked> start weasel when done</label>
+        </div>
+
+        <div class="flash-row">
+          <button id="flashBtn" class="btn primary big" disabled>flash firmware</button>
+          <div class="progress" id="progress"><div id="progressBar"></div></div>
+          <div id="status" class="status" role="status">Loading firmware&hellip;</div>
+        </div>
+
+        <div>
+          <div class="log-head">
+            <span class="lbl-caps">Log</span>
+            <button id="downloadLogBtn" class="btn small" type="button">download log (.txt)</button>
+          </div>
+          <pre id="consoleBox" class="log" aria-live="off"></pre>
+        </div>
+      </div>
+    </section>
+
+    <details class="more" style="grid-column: span 12">
+      <summary>Troubleshooting</summary>
+      <div class="more-body">
+        <div><h3>DFU in FS Mode is not in the list</h3>
+          <p>The Seed is not in DFU mode yet. Repeat step 2, try another cable (many are charge only) and plug straight into the computer. Restarting into DFU mode over USB also works if WEASEL is running firmware 0.2 or&nbsp;later.</p></div>
+        <div><h3>Windows: "access denied" or "unable to claim interface"</h3>
+          <p>Chrome can only reach the bootloader through the WinUSB driver. Get <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a>, put the Seed in DFU mode, choose <em>Options &rsaquo; List All Devices</em>, select <em>DFU in FS Mode</em>, pick <em>WinUSB</em> and click <em>Replace Driver</em>. Once per&nbsp;computer.</p></div>
+        <div><h3>Linux: the device appears but can't be opened</h3>
+          <p>Add a udev rule, for example <code>SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="df11", MODE="0666"</code> in <code>/etc/udev/rules.d/50-stm32-dfu.rules</code>, then unplug and replug.</p></div>
+        <div><h3>"built for the Daisy bootloader"</h3>
+          <p>That file was linked to run from the Seed's QSPI flash or SRAM through the Daisy bootloader. The ROM bootloader this page talks to can only write the 128&nbsp;KB internal flash, so rebuild for internal&nbsp;flash.</p></div>
+        <div><h3>It flashed but WEASEL doesn't start</h3>
+          <p>Press RESET, or unplug and replug. If it still doesn't start, click <em>download log</em> and send it&nbsp;over.</p></div>
+      </div>
+    </details>
+  </div>
+
+  <footer class="foot">
+    <span>&copy; .axs instruments</span>
+    <span>daisy seed &middot; stm32h750 &middot; chrome / edge</span>
+  </footer>
+</div>
+</main>
+
+<script type="module">
+  import { FirmwareImage, StmDfuse, DfuError, CHIPS, hex32 } from './dfuse.js';
+  import { SerialTransport, Link } from './transport.js';
+  import { msg, CMD, RPL, MAGIC, decodeInfo } from './protocol.js';
+
+  const CHIP = CHIPS.STM32H750;
+  const $ = (id) => document.getElementById(id);
+  const flashBtn = $('flashBtn');
+  const statusDiv = $('status');
+  const consoleBox = $('consoleBox');
+  const imageInfo = $('imageInfo');
+
+  const logHistory = [];
+  let manifest = null;
+  let releaseImage = null;
+  let customImage = null;
+  let busy = false;
+
+  // ---------- start screen / flasher routing ----------
+  function route() {
+    let flash = location.hash === '#flash';
+    if (!flash && busy) { history.replaceState(null, '', '#flash'); flash = true; }
+    $('chooser').hidden = flash;
+    $('flasherView').hidden = !flash;
+    $('subtitle').textContent = flash ? 'webusb / dfu firmware flasher' : 'firmware updates and settings over usb';
+    document.title = flash ? 'WEASEL Firmware Flasher | .axs instruments' : 'WEASEL Tools | .axs instruments';
+  }
+  window.addEventListener('hashchange', route);
+  for (const id of ['backLink', 'homeLink']) {
+    $(id).addEventListener('click', (e) => {
+      e.preventDefault();
+      if (busy) return;
+      history.pushState(null, '', location.pathname + location.search);
+      route();
+      window.scrollTo(0, 0);
+    });
+  }
+  window.addEventListener('popstate', route);
+  window.addEventListener('beforeunload', (e) => { if (busy) { e.preventDefault(); e.returnValue = ''; } });
+  route();
+
+  // ---------- log / status ----------
+  function log(message, type = 'INFO') {
+    const line = `[${new Date().toLocaleTimeString()}] [${type}] ${message}`;
+    logHistory.push(line);
+    consoleBox.textContent += line + '\n';
+    consoleBox.scrollTop = consoleBox.scrollHeight;
+  }
+  const keepTogether = (s) => s.replace(/ (\S+)$/, ' $1');
+  function setStatus(text, kind = '') {
+    statusDiv.textContent = keepTogether(text);
+    statusDiv.className = 'status' + (kind ? ' ' + kind : '');
+  }
+  function setProgress(f) {
+    $('progress').classList.toggle('visible', f !== null);
+    $('progressBar').style.width = `${Math.round((f || 0) * 100)}%`;
+  }
+
+  $('downloadLogBtn').addEventListener('click', () => {
+    const header = [`WEASEL flasher log, ${new Date().toISOString()}`, `Browser: ${navigator.userAgent}`, `Firmware source: ${source()}`, ''];
+    const url = URL.createObjectURL(new Blob([header.concat(logHistory).join('\n')], { type: 'text/plain' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `weasel-flasher-log-${Date.now()}.txt`; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------- firmware sources ----------
+  const source = () => document.querySelector('input[name="source"]:checked').value;
+  const currentImage = () => (source() === 'release' ? releaseImage : customImage);
+
+  function describe(image) {
+    const segs = image.segments(CHIP.wordSize);
+    const last = segs[segs.length - 1];
+    const kb = (image.byteCount / 1024).toFixed(1);
+    const used = Math.round(((last.address + last.data.length - CHIP.flashBase) / (CHIP.flashEnd - CHIP.flashBase)) * 100);
+    return `${kb} KB, ${hex32(segs[0].address)} to ${hex32(last.address + last.data.length - 1)}` +
+      (segs.length > 1 ? `, ${segs.length} parts` : '') + (used > 0 && used <= 100 ? `, ${used}% of flash` : '');
+  }
+
+  function showImageInfo() {
+    const image = currentImage();
+    imageInfo.textContent = '';
+    if (!image) { flashBtn.disabled = true; return; }
+    imageInfo.append(describe(image));
+    for (const w of image.warnings(CHIP)) {
+      const span = document.createElement('span');
+      span.className = 'warn';
+      span.textContent = keepTogether('Warning: ' + w);
+      imageInfo.append(span);
+    }
+    flashBtn.disabled = busy;
+  }
+
+  function parseAddress(text) {
+    const t = String(text).trim();
+    const n = /^0x[0-9a-f]+$/i.test(t) ? parseInt(t, 16) : /^\d+$/.test(t) ? parseInt(t, 10) : NaN;
+    if (Number.isNaN(n)) throw new DfuError(`"${text}" is not an address`);
+    return (n < CHIP.flashBase ? CHIP.flashBase + n : n) >>> 0;   // small numbers are offsets
+  }
+
+  async function loadRelease() {
+    const res = await fetch('manifest.json?v=' + Date.now());
+    if (!res.ok) throw new DfuError(`Could not download manifest.json (${res.status})`);
+    manifest = await res.json();
+    const build = manifest.builds && manifest.builds[0];
+    if (!build || !build.parts || !build.parts.length) {
+      $('edgeVersion').textContent = 'no release published yet';
+      $('chooserVersion').textContent = 'no release yet';
+      $('releaseLabel').textContent = 'latest release (none published yet)';
+      document.querySelector('input[value="release"]').disabled = true;
+      document.querySelector('input[value="custom"]').checked = true;
+      onSourceChange();
+      log('manifest.json lists no release yet; flash a custom file.');
+      return false;
+    }
+    const v = manifest.version || '?';
+    $('edgeVersion').textContent = `firmware · ${v}`;
+    $('releaseLabel').textContent = `latest release (${v})*`;
+    $('chooserVersion').textContent = `latest release ${v}`;
+
+    const image = new FirmwareImage();
+    for (const part of build.parts) {
+      const r = await fetch(part.path + '?v=' + Date.now());
+      if (!r.ok) throw new DfuError(`Could not download ${part.path} (${r.status})`);
+      const name = part.path.split('/').pop();
+      if (/\.(hex|ihex)$/i.test(part.path)) image.addHex(await r.text(), name);
+      else image.addBin(new Uint8Array(await r.arrayBuffer()), parseAddress(part.offset || '0'), name);
+      log(`Loaded ${name}`);
+    }
+    image.segments(CHIP.wordSize);   // throws if parts overlap
+    releaseImage = image;
+    log(`Release ${v}: ${describe(image)}`);
+    return true;
+  }
+
+  async function loadCustom() {
+    const file = $('fileInput').files[0];
+    customImage = null;
+    if (!file) return;
+    const isHex = /\.(hex|ihex)$/i.test(file.name);
+    $('addrRow').hidden = isHex;
+    try {
+      const image = new FirmwareImage();
+      if (isHex) image.addHex(await file.text(), file.name);
+      else image.addBin(new Uint8Array(await file.arrayBuffer()), parseAddress($('addrInput').value), file.name);
+      image.segments(CHIP.wordSize);
+      customImage = image;
+      log(`Custom file ${file.name}: ${describe(image)}`);
+      setStatus('Ready to flash');
+    } catch (e) {
+      log(`${file.name}: ${e.message}`, 'ERROR');
+      setStatus(e.message, 'error');
+    }
+  }
+
+  function onSourceChange() {
+    $('customFields').hidden = source() !== 'custom';
+    showImageInfo();
+    if (source() === 'custom' && !customImage) setStatus('Choose a .hex or .bin file');
+    else if (currentImage()) setStatus('Ready to flash');
+  }
+  document.querySelectorAll('input[name="source"]').forEach((r) => r.addEventListener('change', onSourceChange));
+  $('fileInput').addEventListener('change', async () => { await loadCustom(); showImageInfo(); });
+  $('addrInput').addEventListener('change', async () => { await loadCustom(); showImageInfo(); });
+
+  // ---------- restart into DFU over USB serial ----------
+  $('dfuOverUsbBtn').addEventListener('click', async () => {
+    if (!SerialTransport.supported) { setStatus('Web Serial is not available in this browser. Use Chrome or Edge on a computer.', 'error'); return; }
+    const t = new SerialTransport();
+    const link = new Link(t);
+    try {
+      setStatus("Choose WEASEL's USB serial port in the popup");
+      await t.open();
+      log(`Opened ${t.name}`);
+      const info = decodeInfo(await link.request(msg(CMD.INFO), RPL.INFO, 1200));
+      log(`WEASEL firmware ${info.version} (protocol ${info.protocol})`);
+      await link.request(msg(CMD.BOOTLOADER, ...MAGIC.BOOTLOADER), RPL.BOOTLOADER, 1200);
+      log('WEASEL is restarting into DFU mode', 'SUCCESS');
+      setStatus('WEASEL is restarting in DFU mode. Now click flash firmware and pick DFU in FS Mode.', 'ok');
+    } catch (e) {
+      const text = e.name === 'NotFoundError' ? 'No port chosen.'
+        : e.timeout ? 'That port did not answer. WEASEL needs firmware 0.2 or later for this; otherwise use the BOOT and RESET buttons.'
+        : e.message;
+      log(text, 'ERROR');
+      setStatus(text, 'error');
+    } finally {
+      await t.close();
+    }
+  });
+
+  // ---------- flashing ----------
+  function explain(err) {
+    const m = (err && err.message) || String(err);
+    if (err && err.name === 'NotFoundError' && /No device selected/i.test(m)) {
+      return 'No device chosen. If DFU in FS Mode was not in the list, the Seed is not in DFU mode yet (see step 2).';
+    }
+    if (err && (err.name === 'SecurityError' || err.name === 'NetworkError') && /access denied|claim|open/i.test(m)) {
+      const os = /Windows/i.test(navigator.userAgent) ? 'On Windows this usually means the WinUSB driver is missing; see Troubleshooting.'
+        : /Linux/i.test(navigator.userAgent) ? 'On Linux this usually means a udev rule is missing; see Troubleshooting.'
+        : 'Close any other program using the Seed (Arduino IDE, STM32CubeProgrammer, dfu-util) and try again.';
+      return `The browser could not open the bootloader (${m}). ${os}`;
+    }
+    if (err && err.name === 'NotFoundError') return 'The Seed disconnected. Re-enter DFU mode and try again.';
+    if (err && err.usbUnreliable) return 'USB transfers to the bootloader keep failing. Re-enter DFU mode and try another cable or port. Please send the log if it keeps happening.';
+    return m;
+  }
+
+  flashBtn.addEventListener('click', async () => {
+    if (!navigator.usb) {
+      setStatus('WebUSB is not available in this browser. Use Chrome or Edge on a computer.', 'error');
+      log('navigator.usb is undefined', 'ERROR');
+      return;
+    }
+    const image = currentImage();
+    if (!image) return;
+    const warnings = image.warnings(CHIP);
+    if (warnings.length && !confirm(warnings.join('\n\n') + '\n\nFlash it anyway?')) return;
+
+    busy = true;
+    flashBtn.disabled = true;
+    setProgress(null);
+    let dfu = null;
+    let left = false;
+    const t0 = performance.now();
+    try {
+      setStatus('Choose DFU in FS Mode in the popup');
+      log('Requesting WebUSB device 0483:DF11 (STM32 ROM bootloader)');
+      const usbDevice = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x0483, productId: 0xdf11 }] });
+      log(`Selected: ${usbDevice.productName || 'DFU in FS Mode'}${usbDevice.serialNumber ? ', serial ' + usbDevice.serialNumber : ''}`);
+
+      setStatus('Connecting');
+      const blockParam = parseInt(new URLSearchParams(location.search).get('block'), 10);   // ?block=256 forces smaller transfers
+      dfu = new StmDfuse(usbDevice, { log, chip: CHIP, blockSize: Number.isFinite(blockParam) ? blockParam : 0 });
+      await dfu.open();
+      log(`DFU ready: ${dfu.layout.name}, writing for ${CHIP.name} (${(CHIP.flashEnd - CHIP.flashBase) / 1024} KB)`);
+      for (const w of warnings) log(w, 'WARN');
+
+      setProgress(0);
+      await dfu.flash(image, {
+        verify: $('verifyOpt').checked,
+        onProgress: (f, phase) => { setProgress(f); setStatus(`${phase} ${Math.round(f * 100)}%`); },
+      });
+      log(`Flash ${$('verifyOpt').checked ? 'written and verified' : 'written'} in ${((performance.now() - t0) / 1000).toFixed(1)} s`, 'SUCCESS');
+
+      if ($('runOpt').checked) {
+        log('Asking the bootloader to start the firmware');
+        await dfu.leave();
+        left = true;
+      }
+      const note = source() === 'release' && manifest && manifest.builds[0].note ? ' ' + manifest.builds[0].note : '';
+      setStatus(($('runOpt').checked ? 'Done! WEASEL is starting.' : 'Done! Press RESET to start WEASEL.') + note, 'ok');
+    } catch (err) {
+      const text = explain(err);
+      log(text, 'ERROR');
+      if (err && err.name) log(`(${err.name}: ${err.message})`, 'DEBUG');
+      setStatus(text, 'error');
+      setProgress(null);
+    } finally {
+      if (dfu && !left) await dfu.close();
+      busy = false;
+      showImageInfo();
+    }
+  });
+
+  log('Flasher loaded. Target: Daisy Seed (STM32H750), 128 KB internal flash.');
+  loadRelease()
+    .then((ok) => { if (ok) { setStatus('Ready to flash'); showImageInfo(); } })
+    .catch((e) => {
+      log(e.message, 'ERROR');
+      setStatus('Could not load the release firmware. You can still flash a custom file.', 'error');
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "weasel-flasher",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/run-tests.js",
+    "test:firmware": "sh test/firmware/build.sh"
+  }
+}
