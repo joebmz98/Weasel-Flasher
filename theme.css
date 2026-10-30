@@ -69,17 +69,15 @@ strong { font-weight: 800; }
 
 /* ---------- name plate ---------- */
 .plate {
-  display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 22px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 22px;
   padding: 22px 22px 20px; border-bottom: var(--rule);
 }
 .wordmark { font-family: var(--title); font-weight: 400; font-size: 64px; line-height: .9; letter-spacing: .01em; margin: 0; }
 .wordmark a { text-decoration: none; }
-.mascot { width: 26px; height: auto; display: block; }
 .plate-sub { font-family: var(--title); font-size: 19px; line-height: 1.22; text-align: right; margin: 0; }
 .plate-sub small { display: block; font-family: var(--label); font-size: 13px; color: var(--dim); margin-top: 8px; letter-spacing: .02em; }
 @media (max-width: 720px) {
   .plate { grid-template-columns: auto minmax(0, 1fr); }
-  .plate .mascot { display: none; }
   .wordmark { font-size: 46px; }
   .plate-sub { font-size: 15px; }
 }

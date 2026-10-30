@@ -164,7 +164,7 @@ word, the sector is erased and rewritten.
 | `protocol.js` | Protocol, MIDI and panel fields, frame parser, simulated WEASEL |
 | `transport.js` | Web Serial, Web MIDI and demo transports, request/reply |
 | `dfuse.js` | STM32 DfuSe over WebUSB, with the H750 chip table |
-| `assets/` | Fonts (OFL, licences included), the panel's weasel artwork and .axs mascot, taken from the KiCad panel silkscreen |
+| `assets/` | Fonts (OFL, licences included), the panel's weasel artwork (from the KiCad panel silkscreen) and the .axs mascot, used as the tab icon |
 | `firmware-src/` | WEASEL_FW 0.2 with the USB link |
 | `test/` | Simulated F411 and H750 ROM bootloaders, flasher and protocol tests; host build of the firmware protocol code |
 
