@@ -1,7 +1,8 @@
 # WEASEL-Flasher
 
 Web tools for **WEASEL**, the .axs instruments digital west coast synthesiser
-(Daisy Seed, STM32H750): a firmware flasher, MIDI settings and presets.
+(Daisy Seed, STM32H750): a firmware flasher, MIDI settings, presets and a
+playable web version of the synth.
 Nothing to install. They run in **Chrome or Edge on a computer** and need a
 micro-USB data cable.
 
@@ -12,6 +13,7 @@ Built on the MC8P MkII flasher, restyled after the WEASEL front panel.
 | **Update firmware** | `index.html#flash` | WebUSB, to the STM32 ROM DFU bootloader | In DFU mode |
 | **MIDI settings** | `editor.html` | Web Serial (USB CDC) + SysEx frames | Running normally, firmware 0.2 or later |
 | **Presets** | `presets.html` | Web Serial (USB CDC) + SysEx frames | Running normally, firmware 0.2 or later |
+| **Play** | `play.html` | Nothing: the synth runs in the browser | Not needed |
 
 Connect once and the other pages reconnect by themselves (Chrome remembers
 the port this site was allowed to use). **try demo** runs any page against a
@@ -69,6 +71,30 @@ and field order are in `protocol.js`.
 | `07` / `08` / `09` | SAVE `"SAV"` / REVERT / RESET `"DEF"` | `46` |
 | `0A` | BOOTLOADER `"DFU"` | `4A`, then the Seed restarts in DFU mode |
 | | anything refused | `7F <cmd> <reason>` |
+
+## Play (`play.html`)
+
+WEASEL in the browser, no hardware needed. `play-engine.js` is a line-by-line
+port of WEASEL_FW 0.2's `AudioCallback`, `updateParameters` and MIDI handlers,
+with the DaisySP modules it uses (Oscillator, Adsr, Svf, MoogLadder, ReverbSc,
+Wavefolder). It runs in an AudioWorklet, or in a ScriptProcessor where the
+browser won't load one (pages opened straight from disk).
+
+- Every fader and knob, mapped to the firmware's pot index and curve, with the
+  value it sets as the readout. Double-click one to reset it.
+- Mode buttons step through modes like the panel; the options can be clicked
+  too. Stage switches latch. The pulsar has its manual trigger.
+- Virtual patch bay: each destination is a centre input with the four
+  numbered sources in its corners (3 1 / 4 2); click a socket to patch it.
+- MIDI in: on-screen keys, computer keys (`a w s e d f t g y h u j k`, `z` /
+  `x` for octave), a Web MIDI input with channel select, and a test clock to
+  try sync mode.
+- Master volume and an output scope, which the hardware doesn't have.
+- Patches: a few built in, store more in this browser, copy / paste as JSON.
+  A patch holds the whole panel, cables and pots included.
+
+The LEDs show the engine's state (step, envelope, pulsar, random, clock);
+firmware 0.2 doesn't drive the panel LEDs yet.
 
 ## Firmware side (`firmware-src/`)
 
@@ -159,6 +185,9 @@ word, the sector is erased and rewritten.
 | `index.html` | Start page and the flasher (`#flash`) |
 | `editor.html` | MIDI settings: channel drop-down and MIDI in monitor |
 | `presets.html` | Panel modes and the preset library |
+| `play.html` | The synth in the browser |
+| `play-engine.js` | WEASEL_FW 0.2's sound engine and DaisySP modules, ported to JavaScript |
+| `play-patches.js` | Built-in patches for `play.html` |
 | `app.js` | Connection panel shared by the two pages above |
 | `theme.css` | Front panel look: Caprasimo for the Cooper Black wordmark, Nanum Gothic for Malgun Gothic labels |
 | `protocol.js` | Protocol, MIDI and panel fields, frame parser, simulated WEASEL |

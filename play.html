@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WEASEL Web Synth | .axs instruments</title>
+  <meta name="description" content="Play WEASEL, the .axs instruments digital west coast synthesiser, in your browser: the firmware's sound engine with every panel control.">
+  <link rel="icon" href="assets/axs-icon-32.png" type="image/png" sizes="32x32">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .panel { max-width: 1520px; }
+    /* modules in rows that wrap; borders right and bottom, the last ones hidden under the panel edge */
+    .rows { margin: 0 -1px -1px 0; }
+    .row { display: flex; flex-wrap: wrap; }
+    .mod { border-right: var(--rule); border-bottom: var(--rule); display: flex; flex-direction: column; min-width: 0; }
+    .mod .module-body { padding: 14px 14px 16px; }
+    .stack { display: flex; flex-direction: column; min-width: 0; }
+    .stack > .mod { flex: 1; border-right: 0; }
+    .stack > .mod:last-child { border-bottom: 0; }
+    .stack.side { border-right: var(--rule); border-bottom: var(--rule); }
+    .pair { display: flex; flex: 1; }
+    .pair > .mod { flex: 1; }
+    .pair > .mod:last-child { border-right: 0; }
+
+    .g-seq { flex: 5 1 380px; } .g-env { flex: 3 1 250px; } .g-pul { flex: 2.2 1 190px; } .g-lpg { flex: 4 1 300px; }
+    .g-mod { flex: 4.4 1 330px; } .g-cpx { flex: 5.6 1 420px; } .g-side { flex: 3.4 1 280px; }
+    .g-bay { flex: 9 1 560px; } .g-out { flex: 3 1 250px; }
+    .g-midi { flex: 6 1 420px; } .g-lib { flex: 3 1 260px; } .g-info { flex: 4 1 300px; }
+
+    /* controls row above the faders */
+    .ctl { display: flex; flex-wrap: wrap; gap: 16px 20px; align-items: flex-start; justify-content: space-between; }
+    .ctl + .faders { margin-top: 16px; border-top: var(--rule); padding-top: 14px; }
+    .mode { display: flex; align-items: center; gap: 12px; }
+    .mode .key { --size: 34px; }
+    .opts legend { color: var(--dim); font-size: 13px; }
+    .opt { font-size: 13.5px; }
+    .opts { gap: 5px; }
+    .opt .dot { width: 10px; height: 10px; }
+
+    .faders { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 6px 2px; }
+    .fader { min-width: 58px; gap: 6px; }
+    .fader-scale { height: 150px; width: 56px; }
+    .fader input[type="range"] { height: 150px; }
+    .fader-scale::before { left: 0; } .fader-scale::after { right: 0; }
+    .fader-scale .end { left: -18px; width: 16px; font-size: 10px; }
+    .fader .value { font-size: 15px; min-height: 16px; white-space: nowrap; }
+    .fader .lbl { font-size: 12px; max-width: 80px; }
+
+    /* knobs: outlined circles, as on the panel */
+    .knob { display: grid; justify-items: center; gap: 5px; user-select: none; touch-action: none; }
+    .knob .dial { width: 62px; height: 62px; cursor: ns-resize; position: relative; }
+    .knob svg { width: 100%; height: 100%; overflow: visible; }
+    .knob .dial:focus-visible { outline: 2px dashed var(--silk); outline-offset: 4px; border-radius: 50%; }
+    .knob .value { font-family: var(--title); font-size: 15px; line-height: 1; white-space: nowrap; }
+    .knob .lbl { font-size: 12px; text-align: center; }
+    .knob .range { font-size: 10px; color: var(--dim); }
+
+    /* analogue LEDs */
+    .led { --b: 0; background: color-mix(in srgb, var(--silk) calc(var(--b) * 100%), var(--metal)); box-shadow: 0 0 calc(var(--b) * 8px) rgba(255,255,255, calc(var(--b) * .8)); }
+    .ledrow { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
+
+    /* sequencer step switches: latching, On / Off */
+    .steps { display: flex; justify-content: space-around; padding: 2px 0 6px; }
+    .step { display: grid; justify-items: center; gap: 6px; font-size: 11px; }
+    .switch { width: 18px; height: 40px; border: var(--rule); border-radius: 9px; background: var(--mask); padding: 2px; cursor: pointer; display: flex; flex-direction: column; }
+    .switch i { width: 12px; height: 18px; border-radius: 6px; background: var(--silk); transition: transform .1s; }
+    .switch[aria-checked="false"] i { transform: translateY(16px); background: var(--metal); }
+    .switch:focus-visible { outline: 2px dashed var(--silk); outline-offset: 3px; }
+
+    .pushwrap { display: grid; justify-items: center; gap: 6px; font-size: 12px; }
+    .pushwrap .key { --size: 40px; }
+
+    /* patch bay */
+    .bay-body { display: grid; gap: 12px; }
+    .sources { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; }
+    .sources span { display: inline-flex; align-items: center; gap: 7px; }
+    .sources b { font-family: var(--title); font-weight: 400; font-size: 16px; }
+    .dests { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px 10px; }
+    .dest { display: grid; justify-items: center; gap: 6px; }
+    .dest .label-box { font-size: 11px; overflow-wrap: anywhere; padding: 3px 5px 2px; text-align: center; line-height: 1.2; min-height: 34px; display: grid; place-items: center; width: 100%; max-width: 116px; }
+    .cluster { width: 100%; max-width: 120px; aspect-ratio: 108 / 128; }
+    .cluster svg { width: 100%; height: 100%; overflow: visible; }
+    .cluster .sock { cursor: pointer; }
+    .cluster .sock:hover .ring { stroke: var(--silk); stroke-width: 2.2; }
+    .cluster .sock:focus { outline: none; }
+    .cluster .sock:focus-visible .ring { stroke-dasharray: 3 2; stroke-width: 2.2; }
+    .cable { fill: none; stroke: var(--silk); stroke-width: 5; stroke-linecap: round; }
+    .cable-edge { fill: none; stroke: var(--mask); stroke-width: 8; stroke-linecap: round; }
+    .bay-foot { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; font-size: 13px; }
+    @media (max-width: 760px) { .dests { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+    /* line out */
+    .scope { width: 100%; height: 120px; display: block; border: var(--rule); border-radius: 6px; }
+    .out-row { display: flex; align-items: center; justify-content: space-around; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+
+    /* midi keyboard */
+    .kb { position: relative; height: 110px; display: flex; user-select: none; touch-action: none; margin-top: 4px; }
+    .kb .w { flex: 1; border: var(--rule); border-right-width: 0; border-radius: 0 0 5px 5px; background: var(--mask); position: relative; cursor: pointer; }
+    .kb .w:last-of-type { border-right-width: 1px; }
+    .kb .w span { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--dim); }
+    .kb .b { position: absolute; top: 0; height: 62%; background: var(--metal); border-radius: 0 0 4px 4px; cursor: pointer; z-index: 2; box-shadow: 0 0 0 1px var(--mask); }
+    .kb .down { background: var(--silk) !important; }
+    .kb .w.down span { color: var(--mask); }
+    .midi-top { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; }
+    .midi-top .select { font-size: 15px; min-width: 0; padding: 7px 34px 6px 10px; }
+    .midi-top .select-wrap::after { right: 10px; font-size: 16px; }
+    .midi-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .bpm { width: 70px; font-family: var(--mono); }
+    .midi-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin-top: 12px; }
+
+    /* power */
+    .power { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+    .plate { grid-template-columns: auto minmax(0, 1fr) auto; }
+    @media (max-width: 720px) { .plate { grid-template-columns: 1fr; } .power { justify-content: flex-start; } .plate-sub { text-align: left; } }
+
+    /* library */
+    .lib { display: flex; flex-direction: column; gap: 12px; }
+    .store-row { display: flex; gap: 8px; }
+    .store-row .field-text { flex: 1; min-width: 0; }
+    .presets { list-style: none; margin: 0; padding: 0; border-top: var(--rule); max-height: 260px; overflow-y: auto; }
+    .preset { border-bottom: var(--rule); padding: 7px 0 8px; display: flex; gap: 10px; align-items: center; }
+    .preset-name { font: 400 17px/1.15 var(--title); background: none; border: 0; padding: 0; color: var(--silk); text-align: left; cursor: pointer; flex: 1; overflow-wrap: anywhere; }
+    .preset-name:hover { text-decoration: underline; text-underline-offset: 4px; }
+    .preset .btn { padding: 4px 8px 3px; font-size: 11px; border-radius: 4px; }
+    .g-info .info { font-size: 13.5px; }
+    .info .art { max-width: 180px; margin-top: 14px; }
+    .tip { font-size: 12px; color: var(--dim); }
+  </style>
+</head>
+<body>
+<main class="panel">
+<div class="panel-inner">
+
+  <div class="edge" aria-hidden="true">
+    <span class="jack" id="jackOut">line out</span>
+    <span class="jack" id="jackPower">DC 5-9V power</span>
+    <span class="jack" id="jackMidi">MIDI in</span>
+    <span class="push dim" id="edgeInfo">switched off</span>
+  </div>
+
+  <header class="plate">
+    <h1 class="wordmark"><a href="./" data-tool>WEASEL</a></h1>
+    <p class="plate-sub">Digital West Coast Synth<br>Inspired by the MUSIC EASEL
+      <small>web synth &middot; firmware 0.2 sound engine</small></p>
+    <div class="power">
+      <span class="led" id="powerLed"></span>
+      <button class="btn big primary" id="powerBtn" type="button">switch on</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Tools">
+    <a href="editor.html" data-tool>MIDI settings</a>
+    <a href="presets.html" data-tool>Presets</a>
+    <a href="./#flash" data-tool>Update firmware</a>
+    <a href="play.html" data-tool aria-current="page">Play</a>
+    <span class="fill"></span>
+  </nav>
+
+  <div class="rows" id="rows"><div class="row">
+
+    <!-- ===== top row ===== -->
+    <section class="mod g-seq">
+      <div class="module-head"><h2>Sequential voltage source</h2><span class="fill"></span><span class="ledrow" style="border:0"><span id="seqInfo">step 1</span></span></div>
+      <div class="module-body">
+        <div class="ctl">
+          <div class="mode" data-mode="seqTrigger"></div>
+          <div class="mode" data-mode="seqStages"></div>
+        </div>
+        <div class="faders" style="margin-top:14px;border-top:var(--rule);padding-top:12px" id="seqSteps"></div>
+        <div class="faders" data-faders="0,1,2,3,4"></div>
+      </div>
+    </section>
+
+    <section class="mod g-env">
+      <div class="module-head"><h2>Envelope generator</h2><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="ctl">
+          <div class="mode" data-mode="envTrigger"></div>
+          <span class="led" id="envLed" style="margin-top:6px"></span>
+          <div class="mode" data-mode="envMode"></div>
+        </div>
+        <div class="faders" data-faders="5,6,7"></div>
+      </div>
+    </section>
+
+    <section class="mod g-pul">
+      <div class="module-head"><h2>Pulsar</h2><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="ctl">
+          <div class="mode" data-mode="pulsarTrigger"></div>
+          <div class="pushwrap"><span class="led" id="pulsarLed"></span><button class="key" id="pulsarBtn" type="button" aria-label="Trigger the pulsar"></button><span>trigger</span></div>
+        </div>
+        <div class="faders" data-faders="8,9"></div>
+      </div>
+    </section>
+
+    <section class="mod g-lpg">
+      <div class="module-head"><h2>Dual lo pass gate</h2><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="ctl">
+          <div class="mode" data-mode="lpg1Mode"></div>
+          <div class="mode" data-mode="lpg2Mode"></div>
+        </div>
+        <div class="faders" data-faders="21,22,23,24"></div>
+      </div>
+    </section>
+
+    </div><div class="row">
+    <!-- ===== middle row ===== -->
+    <section class="mod g-mod">
+      <div class="module-head"><h2>Modulation oscillator</h2><span>waveform</span><span>modulation</span><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="ctl">
+          <div class="mode" data-mode="modWave"></div>
+          <div class="mode" data-mode="modType"></div>
+          <div data-knob="12"></div>
+        </div>
+        <div class="faders" data-faders="10,11,13,14"></div>
+      </div>
+    </section>
+
+    <section class="mod g-cpx">
+      <div class="module-head"><h2>Complex oscillator</h2><span>polarity</span><span>midi</span><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="ctl">
+          <div data-knob="17"></div>
+          <div data-knob="20"></div>
+          <div class="mode" data-mode="complexWave"></div>
+          <div class="mode" data-mode="polarity"></div>
+          <div class="mode" data-mode="midiFollow"></div>
+        </div>
+        <div class="faders" data-faders="15,16,18,19"></div>
+      </div>
+    </section>
+
+    <div class="stack side g-side">
+      <section class="mod">
+        <div class="module-head"><h2>Clock</h2><span class="fill"></span></div>
+        <div class="module-body">
+          <div class="ctl" style="align-items:center">
+            <div class="mode" data-mode="clockMode"></div>
+            <span class="led" id="clockLed"></span>
+            <div data-knob="25"></div>
+          </div>
+        </div>
+      </section>
+      <div class="pair" style="border-top:0">
+        <section class="mod" style="border-bottom:0">
+          <div class="module-head"><h2>Random voltage</h2><span class="fill"></span></div>
+          <div class="module-body">
+            <div class="ctl" style="flex-direction:column;align-items:flex-start;gap:12px">
+              <span class="led" id="randomLed"></span>
+              <div class="mode" data-mode="randomTrigger"></div>
+            </div>
+          </div>
+        </section>
+        <section class="mod" style="border-bottom:0">
+          <div class="module-head"><h2>Reverb</h2><span class="fill"></span></div>
+          <div class="module-body" style="display:grid;place-items:center"><div data-knob="26"></div></div>
+        </section>
+      </div>
+    </div>
+
+    </div><div class="row">
+    <!-- ===== patch bay row ===== -->
+    <section class="mod g-bay">
+      <div class="module-head"><h2>Modulation sources</h2><span class="fill" style="flex:0 0 auto"></span><span>modulation destinations</span><span class="fill"></span></div>
+      <div class="module-body bay-body">
+        <div class="sources" id="sources"></div>
+        <div class="dests" id="dests"></div>
+        <div class="bay-foot">
+          <span class="tip">click a numbered socket to patch that source into the centre input &middot; click again to pull the cable</span>
+          <button class="btn small" id="unpatchBtn" type="button">pull all cables</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="mod g-out">
+      <div class="module-head"><h2>Master volume</h2><span>line out</span><span class="fill"></span></div>
+      <div class="module-body">
+        <canvas class="scope" id="scope" width="560" height="240" aria-label="Output oscilloscope"></canvas>
+        <div class="out-row">
+          <div data-knob="master"></div>
+          <div class="ledrow"><span class="led" id="peakLed"></span>level</div>
+        </div>
+      </div>
+    </section>
+
+    </div><div class="row">
+    <!-- ===== midi, presets, information ===== -->
+    <section class="mod g-midi">
+      <div class="module-head"><h2>MIDI in</h2><span id="midiKind">on-screen keys</span><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="midi-top">
+          <div class="midi-row">
+            <button class="btn small" id="octDown" type="button" aria-label="Octave down">oct &minus;</button>
+            <span class="readout" style="font-size:18px" id="octLabel">C3</span>
+            <button class="btn small" id="octUp" type="button" aria-label="Octave up">oct +</button>
+          </div>
+          <div class="midi-row">
+            <button class="btn small" id="webMidiBtn" type="button">use a midi keyboard</button>
+            <span class="select-wrap" id="midiSelWrap" hidden><select class="select" id="midiSel" aria-label="MIDI input"></select></span>
+            <span class="select-wrap"><select class="select" id="chanSel" aria-label="MIDI in channel"></select></span>
+          </div>
+        </div>
+        <div class="kb" id="kb" aria-label="Keyboard"></div>
+        <div class="midi-facts">
+          <span class="ledrow"><span class="led" id="noteLed"></span>note held</span>
+          <span class="dim">last note <span id="lastNote" style="color:var(--silk)">&ndash;</span></span>
+          <span class="ledrow"><span class="led" id="midiClockLed"></span><span id="clockFact">no midi clock</span></span>
+          <span class="midi-row" style="margin-left:auto">
+            <span class="dim">test clock</span>
+            <input class="field-text bpm" id="bpm" type="number" min="40" max="240" value="120" aria-label="Test clock tempo">
+            <button class="btn small" id="clockBtn" type="button">send clock</button>
+          </span>
+        </div>
+        <p class="tip" style="margin:10px 0 0">computer keys: <code>a w s e d f t g y h u j k</code> play, <code>z</code> / <code>x</code> change octave. Notes reach WEASEL like its MIDI in jack: trigger selects set to midi, and complex osc. midi on to follow pitch.</p>
+      </div>
+    </section>
+
+    <section class="mod g-lib">
+      <div class="module-head"><h2>Patches</h2><span>this browser</span><span class="fill"></span></div>
+      <div class="module-body lib">
+        <form class="store-row" id="storeForm">
+          <input class="field-text" id="storeName" type="text" maxlength="40" placeholder="name the panel as it is now" autocomplete="off" aria-label="Patch name">
+          <button class="btn primary" type="submit">store</button>
+        </form>
+        <ul class="presets" id="presetList"></ul>
+        <div class="btn-row">
+          <button class="btn small" id="copyBtn" type="button">copy patch</button>
+          <button class="btn small" id="pasteBtn" type="button">paste patch</button>
+        </div>
+        <textarea class="field-text" id="pasteBox" rows="3" placeholder="paste a patch here, then press load" hidden style="font:12px var(--mono);resize:vertical"></textarea>
+        <button class="btn small" id="pasteLoad" type="button" hidden>load</button>
+        <div class="status" id="status" role="status"></div>
+      </div>
+    </section>
+
+    <section class="mod g-info">
+      <div class="module-head"><h2>Information</h2><span class="fill"></span></div>
+      <div class="module-body">
+        <div class="info">
+          <p class="head">trigger modes</p>
+          <ul>
+            <li>midi &rsaquo; triggered by a midi note</li>
+            <li>sequencer &rsaquo; triggered by each sequencer stage</li>
+            <li>pulsar &rsaquo; triggered by the pulsar</li>
+            <li>clock &rsaquo; triggered by the clock speed</li>
+          </ul>
+          <p class="head">envelope generator modes</p>
+          <ul>
+            <li>transient &rsaquo; sustains only for the sustain duration</li>
+            <li>sustain &rsaquo; sustains while the gate is held</li>
+            <li>oscillating &rsaquo; repeats like an oscillator</li>
+          </ul>
+          <p class="head">dual lo pass gate modes</p>
+          <ul>
+            <li>lo pass filter &rsaquo; modulation moves the cut-off</li>
+            <li>combination &rsaquo; moves the cut-off and the vca</li>
+            <li>voltage ctrld. amp &rsaquo; moves the vca</li>
+          </ul>
+          <p class="head">the mod matrix</p>
+          <ul>
+            <li>the centred sockets are modulation inputs; the numbered corner sockets are the four sources</li>
+          </ul>
+          <p>round buttons step through a section's modes, like the panel; '*' marks the mode WEASEL starts in</p>
+          <img class="art" id="art" src="assets/weasel-art.svg" alt="">
+        </div>
+      </div>
+    </section>
+  </div></div>
+
+  <footer class="foot">
+    <span>&copy; .axs instruments</span>
+    <span>sound engine ported from WEASEL_FW 0.2 &middot; runs in this browser</span>
+  </footer>
+</div>
+</main>
+
+<script src="play-engine.js"></script>
+<script src="play-patches.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+  const fexp = (v, lo, hi) => lo + v * v * (hi - lo);
+  const P = WEASEL_PATCHES;
+  if (!getComputedStyle(document.documentElement).getPropertyValue('--mask').trim()) {
+    const n = document.createElement('p');
+    n.style.cssText = 'background:#fff;color:#000;padding:12px 16px;font:700 16px system-ui;margin:0 0 12px';
+    n.textContent = 'theme.css was not found. Put play.html, play-engine.js and play-patches.js in the Weasel-Flasher folder (next to theme.css and assets/), or open weasel-web-synth.html, which needs nothing else.';
+    document.body.prepend(n);
+  }
+
+  // ---------- formatting the readouts ----------
+  const sec = (s) => (s < 1 ? Math.round(s * 1000) + 'ms' : s.toFixed(2) + 's');
+  const hz = (f) => (f < 10 ? f.toFixed(2) : f < 100 ? f.toFixed(1) : Math.round(f)) + 'Hz';
+  const pct = (v) => Math.round(v * 100);
+  const semis = (v) => { const s = (v * 2 - 1) * 3; return (s >= 0 ? '+' : '') + s.toFixed(1); };
+
+  // ---------- panel state ----------
+  const S = {
+    pots: new Array(32).fill(0),
+    modes: { ...P.MODES },
+    steps: [true, true, true, true, true],
+    matrix: [0, 1, 2, 3].map(() => new Array(7).fill(false)),
+    master: 0.6,
+  };
+
+  // pots: firmware index, label, scale ends, readout
+  const POTS = {
+    0: ['stage 1', '100', '0', (v) => pct(v * v)], 1: ['stage 2', '100', '0', (v) => pct(v * v)],
+    2: ['stage 3', '100', '0', (v) => pct(v * v)], 3: ['stage 4', '100', '0', (v) => pct(v * v)],
+    4: ['stage 5', '100', '0', (v) => pct(v * v)],
+    5: ['attack', '10', '.02', (v) => sec(fexp(v, 0.002, 5))],
+    6: ['sustain', '10', '.02', (v) => sec(fexp(v, 0.02, 5))],
+    7: ['decay', '10', '.02', (v) => sec(fexp(v, 0.002, S.modes.envMode === 2 ? 1 : 5))],
+    8: ['decay control', '100', '0', pct],
+    9: ['decay', '10', '.02', (v) => sec(0.02 * Math.pow(250, v))],
+    10: ['frequency control', '100', '0', pct],
+    11: ['frequency', '1000', '.1', (v) => hz(fexp(v, 0.1, 1000))],
+    13: ['modulation control', '100', '0', pct],
+    14: ['modulation', '100', '0', pct],
+    15: ['pitch control', '100', '0', pct],
+    16: ['pitch', '1760', '25', (v) => hz(fexp(v, 25, 1760))],
+    18: ['wavefold control', '100', '0', pct],
+    19: ['wavefold', '20', '1', (v) => '×' + (1 + 19 * v).toFixed(1)],
+    21: ['level 1 control', '100', '0', pct],
+    22: ['level 1', '100', '0', (v) => pct(fexp(v, 0, 0.98))],
+    23: ['level 2 control', '100', '0', pct],
+    24: ['level 2', '100', '0', (v) => pct(fexp(v, 0, 0.98))],
+  };
+  const KNOBS = {
+    12: ['fine tune', '-3 · +3', semis],
+    17: ['fine tune', '-3 · +3', semis],
+    20: ['timbre', '0 · 100', pct],
+    25: ['speed', 'slow · fast', (v) => clockText(v)],
+    26: ['reverb', '0 · 100', pct],
+    master: ['volume', '0 · 10', (v) => (v * 10).toFixed(1)],
+  };
+  function clockText(v) {
+    if (S.modes.clockMode) { const d = [1, 2, 4, 8, 12, 16, 24, 32][clamp(Math.floor((1 - v) * 8), 0, 7)]; return d + ' tick' + (d > 1 ? 's' : ''); }
+    const ms = clamp(0.1 * Math.pow(40000, 1 - v), 0.1, 4000);
+    return ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : ms >= 10 ? Math.round(ms) + 'ms' : ms.toFixed(1) + 'ms';
+  }
+
+  // modes: the order the buttons step through, '*' = power-on
+  const MODES = {
+    seqTrigger: ['trigger select', ['clock', 'pulsar', 'midi'], 0],
+    seqStages: ['stages', ['5', '4', '3'], 0],
+    envTrigger: ['trigger select', ['sequencer', 'pulsar', 'midi'], 0],
+    envMode: ['mode', ['transient', 'sustain', 'oscillating'], 0],
+    pulsarTrigger: ['trigger select', ['sequencer', 'midi', 'free'], 0],
+    lpg1Mode: ['level 1 (complex)', ['voltage ctrld. amp', 'lo pass filter', 'combination'], 2],
+    lpg2Mode: ['level 2 (modulation)', ['voltage ctrld. amp', 'lo pass filter', 'combination'], 2],
+    modWave: ['waveform', ['sine', 'triangle', 'sawtooth', 'square'], 0],
+    modType: ['modulation', ['fm', 'am'], 0],
+    complexWave: ['waveform', ['saw', 'square', 'triangle'], 0],
+    polarity: ['polarity', ['+', '-'], 0],
+    midiFollow: ['midi', ['off', 'on'], 0],
+    clockMode: ['mode', ['free', 'sync'], 0],
+    randomTrigger: ['trigger select', ['sequencer', 'pulsar', 'midi'], 0],
+  };
+  const SOURCES = ['sequencer', 'envelope generator', 'pulsar', 'random voltage'];
+  const DESTS = ['pulsar period', 'modulation osc. frequency', 'modulation osc. modulation amount', 'complex osc. pitch',
+                 'complex osc. wavefolder', 'lo pass gate level 1', 'lo pass gate level 2'];
+
+  // ---------- engine link ----------
+  let ctx = null, node = null, engine = null, running = false, queue = [];
+  function send(msg) {
+    if (node) node.port.postMessage(msg);
+    else if (engine) engine.message(msg);
+  }
+  const fullState = () => ({ type: 'batch', items: [
+    { type: 'pots', pots: Object.fromEntries(S.pots.map((v, i) => [i, v])) },
+    { type: 'modes', modes: { ...S.modes } },
+    { type: 'steps', steps: S.steps },
+    { type: 'matrix', matrix: S.matrix },
+    { type: 'master', value: S.master },
+  ] });
+  function sendFull() {
+    const b = fullState();
+    if (node) node.port.postMessage(b); else if (engine) b.items.forEach((d) => engine.message(d));
+  }
+
+  async function powerOn() {
+    if (running) { await ctx.suspend(); running = false; showPower(); return; }
+    if (!ctx) {
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+      } catch (e) { setStatus('This browser has no Web Audio.', 'error'); return; }
+      try {
+        const src = '(' + WEASEL_ENGINE.toString() + ')();';
+        const url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+        try { await ctx.audioWorklet.addModule(url); }
+        catch (e1) { if (location.protocol === 'file:') throw e1; await ctx.audioWorklet.addModule('play-engine.js'); }
+        node = new AudioWorkletNode(ctx, 'weasel', { numberOfInputs: 0, outputChannelCount: [2] });
+        node.port.onmessage = (e) => telemetry(e.data);
+        node.connect(ctx.destination);
+      } catch (e) {
+        // no AudioWorklet here: run the same engine in a ScriptProcessor
+        console.warn("worklet failed", e && e.message);
+        node = null;
+        const Weasel = WEASEL_ENGINE();
+        engine = new Weasel(ctx.sampleRate);
+        const sp = ctx.createScriptProcessor(1024, 0, 2);
+        let n = 0;
+        sp.onaudioprocess = (ev) => {
+          const L = ev.outputBuffer.getChannelData(0), R = ev.outputBuffer.getChannelData(1);
+          engine.process(L, R, L.length);
+          if ((n += L.length) >= 1536) { n = 0; telemetry(engine.snapshot()); }
+        };
+        sp.connect(ctx.destination);
+      }
+      sendFull();
+    }
+    await ctx.resume();
+    running = true;
+    showPower();
+  }
+  function showPower() {
+    $('powerBtn').textContent = running ? 'switch off' : 'switch on';
+    $('powerBtn').classList.toggle('primary', !running);
+    $('powerLed').style.setProperty('--b', running ? 1 : 0);
+    $('jackPower').classList.toggle('lit', running);
+    $('jackOut').classList.toggle('lit', running);
+    $('edgeInfo').textContent = running ? `running · ${ctx.sampleRate / 1000} kHz${node ? '' : ' · compatibility mode'}` : 'switched off';
+    if (!running) for (const id of ['envLed', 'pulsarLed', 'clockLed', 'randomLed', 'peakLed']) $(id).style.setProperty('--b', 0);
+  }
+  $('powerBtn').addEventListener('click', powerOn);
+
+  // ---------- faders ----------
+  const potInputs = {};
+  function setPot(i, v, push = true) {
+    v = clamp(v, 0, 1);
+    if (i === 'master') { S.master = v; if (push) send({ type: 'master', value: v }); }
+    else { S.pots[i] = v; if (push) send({ type: 'pots', pots: { [i]: v } }); }
+    const c = potInputs[i]; if (c) c.render(v);
+    if (i === 25) refreshKnob(25);
+  }
+  function buildFader(i) {
+    const [label, top, bot, fmt] = POTS[i];
+    const el = document.createElement('div');
+    el.className = 'fader';
+    el.innerHTML = `<div class="value"></div><div class="fader-scale"><span class="end top">${top}</span><span class="end bot">${bot}</span><input type="range" min="0" max="1000" step="1" aria-label="${label}"></div><div class="lbl"></div>`;
+    el.querySelector('.lbl').textContent = label;
+    const input = el.querySelector('input'), val = el.querySelector('.value');
+    input.addEventListener('input', () => setPot(i, input.value / 1000));
+    input.addEventListener('dblclick', () => setPot(i, P.POTS[i] ?? 0));
+    potInputs[i] = { render: (v) => { input.value = Math.round(v * 1000); val.textContent = fmt(v); } };
+    return el;
+  }
+  document.querySelectorAll('[data-faders]').forEach((box) => box.dataset.faders.split(',').forEach((i) => box.append(buildFader(+i))));
+
+  // ---------- knobs: drag up / down, wheel, arrow keys ----------
+  const A0 = -135, A1 = 135;
+  function arc(r, a0, a1) {
+    const p = (a) => { const t = (a - 90) * Math.PI / 180; return [32 + r * Math.cos(t), 32 + r * Math.sin(t)]; };
+    const [x0, y0] = p(a0), [x1, y1] = p(a1);
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  }
+  function buildKnob(holder) {
+    const key = holder.dataset.knob, i = key === 'master' ? 'master' : +key;
+    const [label, range, fmt] = KNOBS[key];
+    holder.className = 'knob';
+    let ticks = '';
+    for (let k = 0; k <= 10; k++) {
+      const a = (A0 + (A1 - A0) * k / 10 - 90) * Math.PI / 180;
+      ticks += `<line x1="${32 + 29 * Math.cos(a)}" y1="${32 + 29 * Math.sin(a)}" x2="${32 + 32 * Math.cos(a)}" y2="${32 + 32 * Math.sin(a)}" stroke="#fff" stroke-width="1"/>`;
+    }
+    holder.innerHTML = `<div class="value"></div><div class="dial" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100"><svg viewBox="0 0 64 64">${ticks}
+      <path class="trk" d="${arc(25, A0, A1)}" stroke="#9a9a9a" stroke-width="2" fill="none"/>
+      <path class="lvl" stroke="#fff" stroke-width="2.4" fill="none"/>
+      <circle cx="32" cy="32" r="19" fill="#000" stroke="#fff" stroke-width="1"/>
+      <line class="ptr" x1="32" y1="32" x2="32" y2="15" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+      <div class="lbl"></div><div class="range">${range}</div>`;
+    holder.querySelector('.lbl').textContent = label;
+    const dial = holder.querySelector('.dial'), val = holder.querySelector('.value');
+    const lvl = holder.querySelector('.lvl'), ptr = holder.querySelector('.ptr');
+    dial.setAttribute('aria-label', label);
+    let cur = 0;
+    potInputs[i] = { render: (v) => {
+      cur = v; const a = A0 + (A1 - A0) * v;
+      lvl.setAttribute('d', v > 0.002 ? arc(25, A0, a) : '');
+      ptr.setAttribute('transform', `rotate(${a} 32 32)`);
+      val.textContent = fmt(v); dial.setAttribute('aria-valuenow', Math.round(v * 100)); dial.setAttribute('aria-valuetext', fmt(v));
+    } };
+    let drag = null;
+    dial.addEventListener('pointerdown', (e) => { drag = { y: e.clientY, v: cur }; dial.setPointerCapture(e.pointerId); e.preventDefault(); dial.focus(); });
+    dial.addEventListener('pointermove', (e) => { if (drag) setPot(i, drag.v + (drag.y - e.clientY) / (e.shiftKey ? 600 : 160)); });
+    dial.addEventListener('pointerup', () => { drag = null; });
+    dial.addEventListener('dblclick', () => setPot(i, i === 'master' ? 0.6 : P.POTS[i] ?? 0.5));
+    dial.addEventListener('wheel', (e) => { e.preventDefault(); setPot(i, cur - Math.sign(e.deltaY) * (e.shiftKey ? 0.004 : 0.02)); }, { passive: false });
+    dial.addEventListener('keydown', (e) => {
+      const d = { ArrowUp: 0.01, ArrowRight: 0.01, ArrowDown: -0.01, ArrowLeft: -0.01, PageUp: 0.1, PageDown: -0.1 }[e.key];
+      if (d) { e.preventDefault(); setPot(i, cur + d); }
+    });
+  }
+  document.querySelectorAll('[data-knob]').forEach(buildKnob);
+  const refreshKnob = (i) => potInputs[i] && potInputs[i].render(i === 'master' ? S.master : S.pots[i]);
+
+  // ---------- mode buttons and option lists ----------
+  const modeViews = {};
+  function setMode(key, v) {
+    S.modes[key] = v;
+    send({ type: 'modes', modes: { [key]: v } });
+    renderMode(key);
+    if (key === 'clockMode') refreshKnob(25);
+    if (key === 'envMode') potInputs[7].render(S.pots[7]);
+  }
+  function renderMode(key) { const r = modeViews[key][S.modes[key]]; if (r) r.checked = true; }
+  document.querySelectorAll('[data-mode]').forEach((box) => {
+    const key = box.dataset.mode, [label, options, def] = MODES[key];
+    const fs = document.createElement('fieldset');
+    fs.className = 'opts';
+    fs.innerHTML = `<legend></legend>`;
+    fs.querySelector('legend').textContent = label;
+    modeViews[key] = options.map((name, i) => {
+      const l = document.createElement('label');
+      l.className = 'opt';
+      l.innerHTML = '<input type="radio"><span class="dot"></span><span class="txt"></span>';
+      const input = l.querySelector('input');
+      input.name = 'm-' + key;
+      input.addEventListener('change', () => setMode(key, i));
+      l.querySelector('.txt').textContent = name + (i === def ? '*' : '');
+      fs.append(l);
+      return input;
+    });
+    const btn = document.createElement('button');
+    btn.className = 'key'; btn.type = 'button';
+    btn.setAttribute('aria-label', `${label}: next mode`);
+    btn.title = 'step to the next mode';
+    btn.addEventListener('click', () => setMode(key, (S.modes[key] + 1) % options.length));
+    box.append(fs, btn);
+  });
+
+  // ---------- sequencer step switches (latching) and step LEDs ----------
+  const stepLeds = [], stepSw = [];
+  for (let i = 0; i < 5; i++) {
+    const d = document.createElement('div');
+    d.className = 'step';
+    d.innerHTML = `<span>On</span><button class="switch" type="button" role="switch" aria-label="stage ${i + 1}"><i></i></button><span>Off</span><span class="led"></span>`;
+    const sw = d.querySelector('.switch');
+    sw.addEventListener('click', () => { S.steps[i] = !S.steps[i]; send({ type: 'steps', steps: S.steps }); renderSteps(); });
+    stepSw.push(sw); stepLeds.push(d.querySelector('.led'));
+    $('seqSteps').append(d);
+  }
+  const renderSteps = () => stepSw.forEach((sw, i) => sw.setAttribute('aria-checked', String(S.steps[i])));
+
+  $('pulsarBtn').addEventListener('pointerdown', () => { send({ type: 'pulsar' }); $('pulsarBtn').setAttribute('aria-pressed', 'true'); });
+  $('pulsarBtn').addEventListener('pointerup', () => $('pulsarBtn').setAttribute('aria-pressed', 'false'));
+  $('pulsarBtn').addEventListener('pointerleave', () => $('pulsarBtn').setAttribute('aria-pressed', 'false'));
+  $('pulsarBtn').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); send({ type: 'pulsar' }); } });
+
+  // ---------- virtual patch bay ----------
+  // numbered sockets sit in the corners of each input, as on the panel: 3 1 / 4 2
+  const CORNER = { 2: [14, 14], 0: [86, 14], 3: [14, 86], 1: [86, 86] };
+  const srcLeds = [];
+  SOURCES.forEach((name, s) => {
+    const sp = document.createElement('span');
+    sp.innerHTML = `<b>${s + 1}</b><span class="led"></span>`;
+    sp.append(document.createTextNode(name));
+    srcLeds.push(sp.querySelector('.led'));
+    $('sources').append(sp);
+  });
+  const cableLayers = [];
+  DESTS.forEach((name, d) => {
+    const box = document.createElement('div');
+    box.className = 'dest';
+    const lab = document.createElement('div');
+    lab.className = 'label-box'; lab.textContent = name;
+    const cl = document.createElement('div');
+    cl.className = 'cluster';
+    let socks = '';
+    for (let s = 0; s < 4; s++) {
+      const [x, y] = CORNER[s];
+      socks += `<g class="sock" data-s="${s}" tabindex="0" role="switch" aria-label="${SOURCES[s]} into ${name}">
+        <circle class="ring" cx="${x}" cy="${y}" r="11" fill="#000" stroke="#9a9a9a" stroke-width="1.4"/>
+        <circle cx="${x}" cy="${y}" r="4.5" fill="#9a9a9a"/>
+        <text x="${x}" y="${y < 50 ? y - 16 : y + 25}" fill="#fff" font-size="12" text-anchor="middle" font-family="var(--title)">${s + 1}</text></g>`;
+    }
+    cl.innerHTML = `<svg viewBox="-4 -14 108 128">
+      <circle cx="50" cy="50" r="17" fill="#000" stroke="#fff" stroke-width="1.6"/>
+      <circle cx="50" cy="50" r="7" fill="#9a9a9a"/>
+      ${socks}<g class="cables"></g></svg>`;
+    cableLayers.push(cl.querySelector('.cables'));
+    cl.querySelectorAll('.sock').forEach((g) => {
+      const toggle = () => { const s = +g.dataset.s; S.matrix[s][d] = !S.matrix[s][d]; send({ type: 'matrix', matrix: S.matrix }); renderBay(); };
+      g.addEventListener('click', toggle);
+      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    });
+    box.append(lab, cl);
+    $('dests').append(box);
+  });
+  function renderBay() {
+    DESTS.forEach((_, d) => {
+      let h = '';
+      for (let s = 0; s < 4; s++) {
+        const on = S.matrix[s][d];
+        const sock = cableLayers[d].parentNode.querySelector(`.sock[data-s="${s}"]`);
+        sock.setAttribute('aria-checked', String(on));
+        if (!on) continue;
+        const [x, y] = CORNER[s];
+        // a short patch cord with a little sag, from the source socket into the input
+        const mx = (x + 50) / 2 + (y < 50 ? 0 : 0), my = (y + 50) / 2 + 9;
+        const path = `M${x} ${y} Q${mx} ${my + (y < 50 ? 6 : 10)} 50 50`;
+        h += `<path class="cable-edge" d="${path}"/><path class="cable" d="${path}"/>
+              <circle cx="${x}" cy="${y}" r="6.5" fill="#fff" stroke="#000" stroke-width="1.5"/>`;
+      }
+      if (h) h += `<circle cx="50" cy="50" r="8" fill="#fff" stroke="#000" stroke-width="1.5"/>`;
+      cableLayers[d].innerHTML = h;
+    });
+  }
+  $('unpatchBtn').addEventListener('click', () => { S.matrix.forEach((r) => r.fill(false)); send({ type: 'matrix', matrix: S.matrix }); renderBay(); });
+
+  // ---------- telemetry: LEDs, readouts, scope ----------
+  let lastSteps = 0, clockFlash = 0, peakHold = 0, latest = null;
+  function telemetry(t) {
+    latest = t;
+    if (t.steps !== lastSteps) { lastSteps = t.steps; clockFlash = performance.now(); }
+  }
+  const sc = $('scope'), g2 = sc.getContext('2d');
+  function frame() {
+    requestAnimationFrame(frame);
+    const now = performance.now();
+    g2.fillStyle = '#000'; g2.fillRect(0, 0, sc.width, sc.height);
+    g2.strokeStyle = '#333'; g2.lineWidth = 1;
+    g2.beginPath(); g2.moveTo(0, sc.height / 2); g2.lineTo(sc.width, sc.height / 2); g2.stroke();
+    if (!latest || !running) return;
+    const t = latest;
+    stepLeds.forEach((l, i) => l.style.setProperty('--b', i === t.step ? 1 : i >= 5 - S.modes.seqStages ? 0 : 0.08));
+    $('seqInfo').textContent = `stage ${t.step + 1}`;
+    $('envLed').style.setProperty('--b', clamp(t.env, 0, 1));
+    $('pulsarLed').style.setProperty('--b', clamp(t.pulsar * 200, 0, 1));
+    $('randomLed').style.setProperty('--b', t.random);
+    $('clockLed').style.setProperty('--b', now - clockFlash < 50 ? 1 : 0);
+    srcLeds[0].style.setProperty('--b', S.steps[t.step] ? 0.15 + 0.85 * fexp(S.pots[t.step], 0, 1) : 0.1);
+    srcLeds[1].style.setProperty('--b', clamp(t.env, 0, 1));
+    srcLeds[2].style.setProperty('--b', clamp(t.pulsar * 200, 0, 1));
+    srcLeds[3].style.setProperty('--b', t.random);
+    peakHold = Math.max(t.peak, peakHold * 0.92);
+    $('peakLed').style.setProperty('--b', clamp(peakHold * 1.4, 0, 1));
+    $('noteLed').style.setProperty('--b', t.noteHeld ? 1 : 0);
+    $('midiClockLed').style.setProperty('--b', t.clockActive ? 1 : 0);
+    $('clockFact').textContent = t.clockActive ? `midi clock ${Math.round(t.bpm)} bpm` + (S.modes.clockMode ? ' · synced' : '') : (S.modes.clockMode ? 'sync on, waiting for midi clock' : 'no midi clock');
+    // scope: start on a rising zero crossing
+    const b = t.scope, w = t.scopeW, N = b.length, span = 512;
+    let start = (w - span - 1 + N) % N;
+    for (let k = 0; k < N - span; k++) {
+      const i0 = (w - span - k - 2 + 2 * N) % N, i1 = (i0 + 1) % N;
+      if (b[i0] <= 0 && b[i1] > 0) { start = i1; break; }
+    }
+    g2.strokeStyle = '#fff'; g2.lineWidth = 2; g2.beginPath();
+    for (let k = 0; k < span; k++) {
+      const v = b[(start + k) % N];
+      const x = (k / (span - 1)) * sc.width, y = sc.height / 2 - v * sc.height * 0.45;
+      k ? g2.lineTo(x, y) : g2.moveTo(x, y);
+    }
+    g2.stroke();
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- MIDI in: on-screen keys, computer keys, Web MIDI ----------
+  let octave = 48, channel = 16; // 16 = omni
+  const held = new Set();
+  const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteName = (n) => NAMES[n % 12] + (Math.floor(n / 12) - 1);
+  function noteOn(n, from = 'keys') {
+    if (!running) powerOn();
+    send({ type: 'noteOn', note: n });
+    held.add(n); $('lastNote').textContent = `${noteName(n)} (${n})`;
+    $('jackMidi').classList.add('lit'); setKeyDown(n, true);
+  }
+  function noteOff(n) {
+    send({ type: 'noteOff', note: n });
+    held.delete(n); setKeyDown(n, false);
+    if (!held.size) $('jackMidi').classList.remove('lit');
+  }
+  const kbKeys = {};
+  function buildKeyboard() {
+    const kb = $('kb'); kb.innerHTML = '';
+    const whites = [0, 2, 4, 5, 7, 9, 11];
+    const span = 25; let wi = 0; const nW = 15;
+    for (let k = 0; k < span; k++) {
+      const n = octave + k, pc = k % 12;
+      if (whites.includes(pc)) {
+        const el = document.createElement('div'); el.className = 'w'; el.dataset.n = n;
+        if (pc === 0) el.innerHTML = `<span>${noteName(n)}</span>`;
+        kb.append(el); kbKeys[n] = el; wi++;
+      }
+    }
+    wi = 0;
+    for (let k = 0; k < span; k++) {
+      const n = octave + k, pc = k % 12;
+      if (whites.includes(pc)) { wi++; continue; }
+      const el = document.createElement('div'); el.className = 'b'; el.dataset.n = n;
+      el.style.left = `calc(${(wi / nW) * 100}% - ${100 / nW * 0.3}%)`; el.style.width = `${100 / nW * 0.6}%`;
+      kb.append(el); kbKeys[n] = el;
+    }
+    $('octLabel').textContent = noteName(octave);
+  }
+  function setKeyDown(n, on) { const k = kbKeys[n]; if (k) k.classList.toggle('down', on); }
+  let ptrNote = null;
+  $('kb').addEventListener('pointerdown', (e) => { const n = e.target.closest('[data-n]'); if (!n) return; e.preventDefault(); $('kb').setPointerCapture(e.pointerId); ptrNote = +n.dataset.n; noteOn(ptrNote); });
+  $('kb').addEventListener('pointermove', (e) => {
+    if (ptrNote === null) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY), k = el && el.closest && el.closest('#kb [data-n]');
+    if (k && +k.dataset.n !== ptrNote) { noteOff(ptrNote); ptrNote = +k.dataset.n; noteOn(ptrNote); }
+  });
+  const ptrUp = () => { if (ptrNote !== null) { noteOff(ptrNote); ptrNote = null; } };
+  $('kb').addEventListener('pointerup', ptrUp); $('kb').addEventListener('pointercancel', ptrUp);
+  const changeOct = (d) => { octave = clamp(octave + d, 12, 96); buildKeyboard(); };
+  $('octDown').addEventListener('click', () => changeOct(-12));
+  $('octUp').addEventListener('click', () => changeOct(12));
+  const QWERTY = 'awsedftgyhujk';
+  const qHeld = {};
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    const k = e.key.toLowerCase();
+    if (k === 'z') return changeOct(-12);
+    if (k === 'x') return changeOct(12);
+    const i = QWERTY.indexOf(k);
+    if (i >= 0) { const n = octave + 12 + i; qHeld[k] = n; noteOn(n); }
+  });
+  window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (qHeld[k] !== undefined) { noteOff(qHeld[k]); delete qHeld[k]; } });
+  buildKeyboard();
+
+  // channel: omni* or 1-16, like the MIDI settings page
+  const chanSel = $('chanSel');
+  chanSel.innerHTML = '<option value="16">omni*</option>' + Array.from({ length: 16 }, (_, i) => `<option value="${i}">channel ${i + 1}</option>`).join('');
+  chanSel.addEventListener('change', () => { channel = +chanSel.value; });
+
+  let midiAccess = null, midiIn = null;
+  $('webMidiBtn').addEventListener('click', async () => {
+    try {
+      if (!navigator.requestMIDIAccess) throw new Error('no web midi');
+      midiAccess = await navigator.requestMIDIAccess();
+    } catch (e) {
+      setStatus('This browser or page would not open MIDI devices. The on-screen keys still work; for a keyboard, use Chrome or Edge on a computer.', 'error');
+      return;
+    }
+    const fill = () => {
+      const ins = [...midiAccess.inputs.values()];
+      $('midiSel').innerHTML = ins.length ? ins.map((p) => `<option value="${p.id}">${p.name}</option>`).join('') : '<option value="">no midi inputs</option>';
+      $('midiSelWrap').hidden = false; $('webMidiBtn').hidden = true;
+      pick();
+    };
+    const pick = () => {
+      if (midiIn) midiIn.onmidimessage = null;
+      midiIn = midiAccess.inputs.get($('midiSel').value) || null;
+      if (midiIn) { midiIn.onmidimessage = onMidi; $('midiKind').textContent = midiIn.name; }
+    };
+    $('midiSel').onchange = pick;
+    midiAccess.onstatechange = fill;
+    fill();
+  });
+  function onMidi(e) {
+    const [st, d1, d2] = e.data;
+    if (st === 0xf8) return send({ type: 'clock', t: e.timeStamp });
+    if (st === 0xfa) return send({ type: 'start' });
+    if (st === 0xfc) return send({ type: 'stop' });
+    const type = st & 0xf0, ch = st & 0x0f;
+    if (channel !== 16 && ch !== channel) return;
+    if (type === 0x90 && d2 > 0) noteOn(d1, 'midi');
+    else if (type === 0x80 || (type === 0x90 && d2 === 0)) noteOff(d1);
+  }
+
+  // test clock: 24 pulses per quarter note, as from a sequencer
+  let clockTimer = null;
+  $('clockBtn').addEventListener('click', () => {
+    if (clockTimer) { clearInterval(clockTimer); clockTimer = null; send({ type: 'stop' }); $('clockBtn').textContent = 'send clock'; return; }
+    if (!running) powerOn();
+    send({ type: 'start' });
+    const bpm = clamp(+$('bpm').value || 120, 40, 240);
+    const period = 60000 / (bpm * 24); let next = performance.now();
+    clockTimer = setInterval(() => { const now = performance.now(); while (next <= now) { send({ type: 'clock', t: next }); next += period; } }, 5);
+    $('clockBtn').textContent = 'stop clock';
+  });
+  $('bpm').addEventListener('change', () => { if (clockTimer) { $('clockBtn').click(); $('clockBtn').click(); } });
+
+  // ---------- patches ----------
+  const STORE = 'weasel.play.patches.v1';
+  let user = [];
+  try { user = JSON.parse(localStorage.getItem(STORE) || '[]').filter((p) => p && p.name); } catch (e) { user = []; }
+  const saveUser = () => { try { localStorage.setItem(STORE, JSON.stringify(user)); } catch (e) { setStatus('This browser would not keep the patch. Use copy patch to keep it.', 'error'); } };
+  function capture(name) {
+    const pots = {};
+    for (const k of Object.keys(P.POTS)) pots[k] = +S.pots[k].toFixed(4);
+    const cables = [];
+    S.matrix.forEach((r, s) => r.forEach((on, d) => on && cables.push([s, d])));
+    return { name, device: 'WEASEL', pots, modes: { ...S.modes }, steps: S.steps.slice(), cables };
+  }
+  function recall(p) {
+    for (const k of Object.keys(P.POTS)) setPot(+k, p.pots && p.pots[k] !== undefined ? +p.pots[k] : P.POTS[k], false);
+    for (const k of Object.keys(P.MODES)) {
+      const n = MODES[k][1].length, v = p.modes ? Math.round(+p.modes[k]) : P.MODES[k];
+      S.modes[k] = v >= 0 && v < n ? v : P.MODES[k];
+      renderMode(k);
+    }
+    S.steps = (p.steps || []).length === 5 ? p.steps.map(Boolean) : [true, true, true, true, true];
+    S.matrix.forEach((r) => r.fill(false));
+    (p.cables || []).forEach(([s, d]) => { if (S.matrix[s] && d >= 0 && d < 7) S.matrix[s][d] = true; });
+    renderSteps(); renderBay(); refreshKnob(25); potInputs[7].render(S.pots[7]);
+    sendFull();
+    setStatus(`recalled ${p.name}`, 'ok');
+  }
+  function renderLib() {
+    const ul = $('presetList'); ul.innerHTML = '';
+    [...P.list, ...user].forEach((p) => {
+      const li = document.createElement('li'); li.className = 'preset';
+      const b = document.createElement('button'); b.className = 'preset-name'; b.type = 'button'; b.textContent = p.name;
+      b.addEventListener('click', () => recall(p));
+      li.append(b);
+      if (!p.builtin) {
+        const del = document.createElement('button'); del.className = 'btn'; del.type = 'button'; del.textContent = 'delete';
+        del.addEventListener('click', () => { user = user.filter((q) => q !== p); saveUser(); renderLib(); });
+        li.append(del);
+      } else {
+        const t = document.createElement('span'); t.className = 'tip'; t.textContent = 'built in'; li.append(t);
+      }
+      ul.append(li);
+    });
+  }
+  $('storeForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('storeName').value.trim() || 'untitled';
+    user.push(capture(name)); saveUser(); renderLib();
+    $('storeName').value = ''; setStatus(`stored ${name}`, 'ok');
+  });
+  $('copyBtn').addEventListener('click', async () => {
+    const text = JSON.stringify(capture($('storeName').value.trim() || 'my patch'));
+    try { await navigator.clipboard.writeText(text); setStatus('patch copied: paste it into a message or a file to keep it', 'ok'); }
+    catch (e) { $('pasteBox').hidden = false; $('pasteBox').value = text; $('pasteBox').select(); setStatus('copy the text in the box', ''); }
+  });
+  $('pasteBtn').addEventListener('click', () => { $('pasteBox').hidden = false; $('pasteLoad').hidden = false; $('pasteBox').value = ''; $('pasteBox').focus(); });
+  $('pasteLoad').addEventListener('click', () => {
+    try { const p = JSON.parse($('pasteBox').value); if (!p || typeof p !== 'object') throw 0; p.name = String(p.name || 'pasted patch').slice(0, 40); recall(p); user.push(p); saveUser(); renderLib(); $('pasteBox').hidden = true; $('pasteLoad').hidden = true; }
+    catch (e) { setStatus('That text is not a WEASEL patch.', 'error'); }
+  });
+  function setStatus(text, kind = '') { $('status').textContent = text; $('status').className = 'status' + (kind ? ' ' + kind : ''); }
+
+  // start on a playable patch
+  recall(P.list[1]); setStatus('');
+  setPot('master', S.master, false);
+  renderLib();
+})();
+</script>
+</body>
+</html>
