@@ -103,6 +103,7 @@
           <div><span class="dim">channel</span> <span id="monChan">&ndash;</span></div>
           <div><span class="dim">velocity</span> <span class="velbar"><i id="monVel"></i></span></div>
           <div><span class="dim">clock</span> <span id="monClock">&ndash;</span></div>
+          <div><span class="dim">seq clock</span> <span id="monSeq">&ndash;</span></div>
         </div>
         <div class="leds">
           <span><i class="led" id="ledData"></i>data</span>
@@ -149,7 +150,7 @@
 </main>
 
 <script type="module">
-  import { msg, CMD, RPL, MAGIC, OMNI, MIDI_DEFAULTS, encodeMidi, decodeMidi, decodeStatus, checksum, noteName, channelName } from './protocol.js';
+  import { msg, CMD, RPL, MAGIC, OMNI, MIDI_DEFAULTS, encodeMidi, decodeMidi, decodeStatus, checksum, noteName, channelName, TICK_DIVISIONS } from './protocol.js';
   import { createConnection, keepDemoInLinks } from './app.js';
 
   const $ = (id) => document.getElementById(id);
@@ -202,6 +203,23 @@
   }
 
   // ---------- monitor ----------
+  // Sequencer clock line: the internal clock's rate (one step = one beat), or in MIDI
+  // sync mode how many clock ticks make a step.
+  function seqText(st) {
+    if (st.stepMs === null || st.ticksPerStep === null) return 'needs firmware 1.2';
+    if (st.clockSync) {
+      const t = st.ticksPerStep;
+      const name = TICK_DIVISIONS[t] ? ` (${TICK_DIVISIONS[t]})` : '';
+      const per = `${t} tick${t === 1 ? '' : 's'}/step${name}`;
+      return st.clockReceiving && st.bpm > 0 ? `${per} \u00b7 ${Math.round(st.bpm * 24 / t)} steps/min` : `${per} \u00b7 waiting for clock`;
+    }
+    if (!(st.stepMs > 0)) return 'internal';
+    const bpm = 60000 / st.stepMs;
+    const ms = st.stepMs >= 10 ? `${Math.round(st.stepMs)} ms` : `${st.stepMs.toFixed(2)} ms`;
+    const rate = bpm >= 10000 ? `${(bpm / 60).toFixed(0)} steps/s` : `${bpm.toFixed(1)} bpm`;
+    return `${rate} \u00b7 ${ms}/step`;
+  }
+
   function showStatus(st) {
     setDirty(st.dirty || pending);
     if (st.anyNote) {
@@ -211,6 +229,7 @@
       $('monVel').style.width = `${Math.round((st.lastVelocity / 127) * 100)}%`;
     }
     $('monClock').textContent = st.clockReceiving ? `${st.bpm.toFixed(1)} bpm${st.clockSync ? ', synced' : ''}` : 'none';
+    $('monSeq').textContent = seqText(st);
     $('ledHeld').classList.toggle('on', st.noteHeld);
     $('ledClock').classList.toggle('on', st.clockReceiving);
     $('ledSync').classList.toggle('on', st.clockSync);

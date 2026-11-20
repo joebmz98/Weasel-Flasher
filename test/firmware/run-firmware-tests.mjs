@@ -128,5 +128,11 @@ for (const f of [P.msg(P.CMD.GET_MIDI), P.msg(P.CMD.GET_PANEL), P.msg(P.CMD.STAT
 }
 ok('replies have the same shape as the demo WEASEL in the page');
 
+r = await req(P.msg(P.CMD.STATUS));
+st = P.decodeStatus(r.p);
+assert.equal(r.p.length, 17);
+assert.ok(st.stepMs !== null && st.ticksPerStep !== null);
+ok('STATUS carries the sequencer clock (step time, ticks per step)');
+
 console.log('\nALL FIRMWARE CHECKS PASSED');
 proc.stdin.end();

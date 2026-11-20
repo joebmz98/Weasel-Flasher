@@ -129,7 +129,13 @@ export const msg = (cmd, ...data) => [...HDR, cmd, ...data, 0xf7];
 export const isOurs = (d) => d.length >= 6 && HDR.every((b, i) => d[i] === b) && d[d.length - 1] === 0xf7;
 export const payload = (d) => Array.from(d.slice(5, -1));
 
-// STATUS reply payload.
+// Clock pot divisions in MIDI sync mode: MIDI clock ticks (24 per quarter note) per step.
+export const TICK_DIVISIONS = {
+  1: '1/96', 2: '1/48', 4: '1/16 triplet', 8: '1/8 triplet', 12: '1/8', 16: '1/4 triplet', 24: '1/4', 32: '1/2 triplet',
+};
+
+// STATUS reply payload. Bytes 13-16 (firmware 1.2+): the sequencer clock. stepMs and
+// ticksPerStep are null when the firmware is older and doesn't send them.
 export function decodeStatus(p) {
   const bpm10 = ((p[8] & 0x7f) << 7) | (p[9] & 0x7f);
   return {
@@ -147,6 +153,8 @@ export function decodeStatus(p) {
     activity: p[10],
     storage: ['unknown', 'factory', 'saved'][p[11]] || 'unknown',
     panelSum: p[12],
+    stepMs: p.length >= 17 ? (((p[13] & 0x7f) << 14) | ((p[14] & 0x7f) << 7) | (p[15] & 0x7f)) / 100 : null,
+    ticksPerStep: p.length >= 17 ? p[16] & 0x7f : null,
   };
 }
 
@@ -157,6 +165,10 @@ export function encodeStatus(s) {
     (s.noteHeld ? 1 : 0) | (s.anyNote ? 2 : 0), s.lastChannel & 0x0f, s.lastVelocity & 0x7f,
     (s.clockReceiving ? 1 : 0) | (s.clockSync ? 2 : 0), bpm10 >> 7, bpm10 & 0x7f, s.activity & 0x7f,
     { unknown: 0, factory: 1, saved: 2 }[s.storage] ?? 0, s.panelSum & 0x7f,
+    ...(() => {
+      const period = clamp(Math.round((s.stepMs || 0) * 100), 0, 0x1fffff);  // 10 us units, 21 bits
+      return [(period >> 14) & 0x7f, (period >> 7) & 0x7f, period & 0x7f, (s.ticksPerStep || 0) & 0x7f];
+    })(),
   ];
 }
 
@@ -241,6 +253,8 @@ export class DemoWeasel {
       activity: this.activity,
       storage: this.storage,
       panelSum: checksum(encodePanel(this.panel)),
+      stepMs: 250,       // internal clock: 240 steps a minute
+      ticksPerStep: 12,  // sync: eighth notes
     };
   }
 

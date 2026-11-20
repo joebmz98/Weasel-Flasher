@@ -323,4 +323,18 @@ await test('simulated WEASEL: panel recall and the status checksum', () => {
   assert.notEqual(dev.status().panelSum, P.checksum(P.encodePanel(preset)));
 });
 
+await test('status: sequencer clock bytes (firmware 1.2+) round-trip; older firmware decodes to null', () => {
+  const base = new P.DemoWeasel().status();
+  for (const [stepMs, ticks] of [[250, 12], [4000, 32], [0.1, 1], [12.34, 24]]) {
+    const st = P.decodeStatus(P.encodeStatus({ ...base, stepMs, ticksPerStep: ticks }));
+    assert.equal(st.stepMs, Math.round(stepMs * 100) / 100);
+    assert.equal(st.ticksPerStep, ticks);
+  }
+  const old = P.decodeStatus(P.encodeStatus(base).slice(0, 13));  // firmware 1.1 and earlier
+  assert.equal(old.stepMs, null);
+  assert.equal(old.ticksPerStep, null);
+  assert.equal(old.panelSum, base.panelSum);
+  for (const t of [1, 2, 4, 8, 12, 16, 24, 32]) assert.ok(P.TICK_DIVISIONS[t], `name for ${t} ticks`);
+});
+
 console.log(`\n${passed} passed${process.exitCode ? ', some FAILED' : ''}`);
