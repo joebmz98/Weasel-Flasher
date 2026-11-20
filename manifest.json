@@ -1,5 +1,10 @@
 {
   "name": "WEASEL Digital West Coast Synthesiser Firmware",
-  "version": "",
-  "builds": []
+  "version": "v1.0",
+  "builds": [
+    {
+      "chipFamily": "STM32H750",
+      "parts": [{ "path": "firmware/WEASEL_FW.ino.hex" }]
+    }
+  ]
 }
