@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Released firmware: never convert line endings or treat as text diffs
+firmware/*.hex -text -diff
+firmware/*.bin binary

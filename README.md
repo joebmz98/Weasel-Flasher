@@ -169,9 +169,10 @@ word, the sector is erased and rewritten.
    {
      "name": "WEASEL Digital West Coast Synthesiser Firmware",
      "version": "v1.0",
-     "builds": [{ "chipFamily": "STM32H750", "parts": [{ "path": "firmware/WEASEL_FW.ino.bin", "offset": "0x08000000" }] }]
+     "builds": [{ "chipFamily": "STM32H750", "parts": [{ "path": "firmware/WEASEL_FW.ino.hex" }] }]
    }
    ```
+   A `.hex` carries its own addresses. A `.bin` needs `"offset": "0x08000000"` on its part.
 3. If the protocol changed, bump `PROTOCOL` in both `protocol.js` here and `WeaselEditor.h` in the WEASEL repo.
 4. `npm test` (Node 18+, no packages), commit, push.
 
