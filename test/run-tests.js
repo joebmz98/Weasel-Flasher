@@ -323,7 +323,7 @@ await test('simulated WEASEL: panel recall and the status checksum', () => {
   assert.notEqual(dev.status().panelSum, P.checksum(P.encodePanel(preset)));
 });
 
-await test('status: sequencer clock bytes (firmware 1.2+) round-trip; older firmware decodes to null', () => {
+await test('status: sequencer clock bytes (firmware 1.1.1+) round-trip; older firmware decodes to null', () => {
   const base = new P.DemoWeasel().status();
   for (const [stepMs, ticks] of [[250, 12], [4000, 32], [0.1, 1], [12.34, 24]]) {
     const st = P.decodeStatus(P.encodeStatus({ ...base, stepMs, ticksPerStep: ticks }));

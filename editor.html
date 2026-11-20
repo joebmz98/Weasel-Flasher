@@ -206,7 +206,7 @@
   // Sequencer clock line: the internal clock's rate (one step = one beat), or in MIDI
   // sync mode how many clock ticks make a step.
   function seqText(st) {
-    if (st.stepMs === null || st.ticksPerStep === null) return 'needs firmware 1.2';
+    if (st.stepMs === null || st.ticksPerStep === null) return 'needs firmware 1.1.1';
     if (st.clockSync) {
       const t = st.ticksPerStep;
       const name = TICK_DIVISIONS[t] ? ` (${TICK_DIVISIONS[t]})` : '';

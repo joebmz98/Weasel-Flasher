@@ -134,7 +134,7 @@ export const TICK_DIVISIONS = {
   1: '1/96', 2: '1/48', 4: '1/16 triplet', 8: '1/8 triplet', 12: '1/8', 16: '1/4 triplet', 24: '1/4', 32: '1/2 triplet',
 };
 
-// STATUS reply payload. Bytes 13-16 (firmware 1.2+): the sequencer clock. stepMs and
+// STATUS reply payload. Bytes 13-16 (firmware 1.1.1+): the sequencer clock. stepMs and
 // ticksPerStep are null when the firmware is older and doesn't send them.
 export function decodeStatus(p) {
   const bpm10 = ((p[8] & 0x7f) << 7) | (p[9] & 0x7f);
