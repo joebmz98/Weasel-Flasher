@@ -96,7 +96,7 @@ export function createConnection({ setStatus, onConnect = async () => {}, onStat
       if (e.name === 'NotFoundError' && /No port selected|No device/i.test(e.message)) return setStatus('No port chosen.');
       if (e.name === 'SecurityError') return setStatus('The browser blocked access. If this page is embedded in another site, open it in its own tab.', 'error');
       if (e.name === 'NetworkError' || e.name === 'InvalidStateError') return setStatus('Could not open the port. Close the Arduino serial monitor or any other app using it, then try again.', 'error');
-      setStatus(e.timeout ? 'WEASEL did not answer. It needs firmware 0.2 or later; update it with the firmware flasher.' : e.message, 'error');
+      setStatus(e.timeout ? 'WEASEL did not answer. It needs firmware 1.0 or later; update it with the firmware flasher.' : e.message, 'error');
     }
   }
 

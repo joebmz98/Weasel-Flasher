@@ -106,7 +106,7 @@
           <span>
             <span class="tool-name">midi settings</span>
             <span class="tool-desc">Choose the MIDI in channel and watch the notes and clock WEASEL&nbsp;receives.</span>
-            <span class="tool-meta"><span class="label-box">usb serial</span><span class="label-box">firmware 0.2 or later</span></span>
+            <span class="tool-meta"><span class="label-box">usb serial</span><span class="label-box">firmware 1.0 or later</span></span>
           </span>
           <span class="tool-chev" aria-hidden="true">&rsaquo;</span>
         </a>
@@ -151,7 +151,7 @@
           </ol>
         </div>
         <div class="or">
-          <p class="lbl" style="margin:0">or, with firmware 0.2 or later running, skip the buttons:</p>
+          <p class="lbl" style="margin:0">or, with firmware 1.0 or later running, skip the buttons:</p>
           <div class="btn-row">
             <button class="btn" id="dfuOverUsbBtn" type="button">restart weasel into dfu mode</button>
           </div>
@@ -203,7 +203,7 @@
       <summary>Troubleshooting</summary>
       <div class="more-body">
         <div><h3>DFU in FS Mode is not in the list</h3>
-          <p>The Seed is not in DFU mode yet. Repeat step 2, try another cable (many are charge only) and plug straight into the computer. Restarting into DFU mode over USB also works if WEASEL is running firmware 0.2 or&nbsp;later.</p></div>
+          <p>The Seed is not in DFU mode yet. Repeat step 2, try another cable (many are charge only) and plug straight into the computer. Restarting into DFU mode over USB also works if WEASEL is running firmware 1.0 or&nbsp;later.</p></div>
         <div><h3>Windows: "access denied" or "unable to claim interface"</h3>
           <p>Chrome can only reach the bootloader through the WinUSB driver. Get <a href="https://zadig.akeo.ie/" target="_blank" rel="noopener">Zadig</a>, put the Seed in DFU mode, choose <em>Options &rsaquo; List All Devices</em>, select <em>DFU in FS Mode</em>, pick <em>WinUSB</em> and click <em>Replace Driver</em>. Once per&nbsp;computer.</p></div>
         <div><h3>Linux: the device appears but can't be opened</h3>
@@ -404,7 +404,7 @@
       setStatus('WEASEL is restarting in DFU mode. Now click flash firmware and pick DFU in FS Mode.', 'ok');
     } catch (e) {
       const text = e.name === 'NotFoundError' ? 'No port chosen.'
-        : e.timeout ? 'That port did not answer. WEASEL needs firmware 0.2 or later for this; otherwise use the BOOT and RESET buttons.'
+        : e.timeout ? 'That port did not answer. WEASEL needs firmware 1.0 or later for this; otherwise use the BOOT and RESET buttons.'
         : e.message;
       log(text, 'ERROR');
       setStatus(text, 'error');

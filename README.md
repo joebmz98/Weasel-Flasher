@@ -11,8 +11,8 @@ Built on the MC8P MkII flasher, restyled after the WEASEL front panel.
 | Page | Opens | Talks to WEASEL over | WEASEL needs to be |
 | --- | --- | --- | --- |
 | **Update firmware** | `index.html#flash` | WebUSB, to the STM32 ROM DFU bootloader | In DFU mode |
-| **MIDI settings** | `editor.html` | Web Serial (USB CDC) + SysEx frames | Running normally, firmware 0.2 or later |
-| **Presets** | `presets.html` | Web Serial (USB CDC) + SysEx frames | Running normally, firmware 0.2 or later |
+| **MIDI settings** | `editor.html` | Web Serial (USB CDC) + SysEx frames | Running normally, firmware 1.0 or later |
+| **Presets** | `presets.html` | Web Serial (USB CDC) + SysEx frames | Running normally, firmware 1.0 or later |
 | **Play** | `play.html` | Nothing: the synth runs in the browser | Not needed |
 
 Connect once and the other pages reconnect by themselves (Chrome remembers
@@ -125,7 +125,7 @@ the WEASEL repo if it finds one next to this repo (or at
 ## Update firmware (flasher)
 
 1. Connect the Seed's micro-USB straight to the computer.
-2. DFU mode: **hold BOOT, tap RESET, release BOOT**. Or, with 0.2 running,
+2. DFU mode: **hold BOOT, tap RESET, release BOOT**. Or, with 1.0 or later running,
    **restart weasel into dfu mode** on the flasher page does it over USB.
 3. Pick the firmware, click **flash firmware**, choose **DFU in FS Mode**.
 4. Wait for **done**.

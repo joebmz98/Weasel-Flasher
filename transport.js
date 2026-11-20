@@ -3,7 +3,7 @@
 //
 //  SerialTransport  USB serial (Web Serial). DaisyDuino's USB port runs as a
 //                   CDC serial port when the sketch is built with USB support
-//                   set to CDC; this is what firmware 0.2 uses.
+//                   set to CDC; this is what firmware 1.0 and later use.
 //  MidiTransport    USB MIDI (Web MIDI + SysEx), for a future firmware that
 //                   shows up as a MIDI device.
 //  DemoTransport    the simulated WEASEL in protocol.js.

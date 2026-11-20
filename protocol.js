@@ -198,7 +198,7 @@ export const channelName = (c) => (c === OMNI ? 'omni' : `channel ${c + 1}`);
 // A WEASEL that lives in the page, for "try demo" and the tests. It answers
 // exactly like the firmware and makes up some MIDI traffic to show.
 export class DemoWeasel {
-  constructor({ version = '0.2-demo' } = {}) {
+  constructor({ version = '1.1-demo' } = {}) {
     this.version = version;
     this.saved = { ...MIDI_DEFAULTS };
     this.live = { ...MIDI_DEFAULTS };
