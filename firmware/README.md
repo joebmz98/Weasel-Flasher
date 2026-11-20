@@ -11,4 +11,6 @@ points at the current one, e.g. `firmware/WEASEL_FW.ino.bin`. See
 
 | Version | File | Built from |
 |---|---|---|
-| v1.0 | `WEASEL_FW.ino.hex` | WEASEL repo `main` (`727fb33`): hardware 1.0 (shift registers, AW9523 LEDs), MIDI input fixes, patch-bay floating-input guard, USB link for the editor and presets pages |
+| v1.1 | `WEASEL_FW.ino.hex` | WEASEL repo `main` (`bff9d65`): v1.0 plus panel memory (powers up with the last button modes; hold the manual pulsar button at power-up to clear) |
+
+Earlier: v1.0 from `727fb33` (hardware 1.0, MIDI input fixes, patch-bay guard, USB link) is in this folder's git history.
