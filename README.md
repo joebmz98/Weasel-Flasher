@@ -93,37 +93,34 @@ browser won't load one (pages opened straight from disk).
 - Patches: a few built in, store more in this browser, copy / paste as JSON.
   A patch holds the whole panel, cables and pots included.
 
-The LEDs show the engine's state (step, envelope, pulsar, random, clock);
-firmware 0.2 doesn't drive the panel LEDs yet.
+The LEDs show the engine's state (step, envelope, pulsar, random, clock).
 
-## Firmware side (`firmware-src/`)
+## Firmware side
 
-`firmware-src/WEASEL_FW/` is `src/WEASEL_FW` from the WEASEL repo with the
-changes for 0.2 (`firmware-src/WEASEL_FW-0.2.patch` shows exactly what
-changed):
+The firmware source lives in the WEASEL repo:
+[`src/WEASEL_FW`](https://github.com/joebmz98/Weasel-West-Coast-Synthesiser/tree/main/src/WEASEL_FW).
+This repo only holds the released binaries the flasher offers, in
+[`firmware/`](firmware/).
 
-- `WeaselEditor.h` (new): the USB link. Keeps the receive channel at the top
-  of the Seed's 8 MB QSPI flash (`0x907F0000`, DaisyDuino's
-  `PersistentStorage`), so firmware updates keep it.
-- `WEASEL_FW.ino`:
-  - note on/off ignore other channels when one is set
-  - `readPanelModes()` / `writePanelModes()` hand the panel modes to the
-    web page; writing one has the same side effects as pressing its button
-  - `setModWaveform()` / `setComplexWaveform()` are shared by the buttons and
-    presets
-  - `editor.poll()` in `loop()`, and **restart into dfu mode** from the web page
-- **Fix:** the complex oscillator waveform button now steps saw > square >
-  triangle, as printed on the panel. In 0.1 it started on saw, but the first
-  press went to triangle and the second back to saw.
+The web pages talk to the firmware through `WeaselEditor.h` in that folder:
+the USB link. It keeps the MIDI receive channel at the top of the Seed's 8 MB
+QSPI flash (`0x907F0000`, DaisyDuino's `PersistentStorage`), so firmware
+updates keep it, hands the panel modes to the presets page, and restarts the
+Seed into DFU mode on request. Firmware 1.0 also ignores MIDI on other
+channels when one is set, and steps the complex waveform saw > square >
+triangle, as printed on the panel.
 
 Build in Arduino IDE with the Daisy Seed board, and
 **Tools > USB support > CDC (generic 'Serial' supersede U(S)ART)** so the USB
-port shows up as a serial port. MIDI stays on `Serial1` (TRS in, D14).
+port shows up as a serial port. MIDI stays on `Serial1` (TRS in, D14). Leave
+`WEASEL_DEBUG` at 0 for the web pages: its serial log shares the USB port.
 
 `npm run test:firmware` compiles `WeaselEditor.h` on your computer with
 the QSPI and USB faked, and checks it against `protocol.js` (needs g++ and
-`DAISYDUINO=<path to the DaisyDuino library>`). The full sketch has not
-been compiled for the Seed or tried on hardware yet.
+`DAISYDUINO=<path to the DaisyDuino library>`). It uses a local checkout of
+the WEASEL repo if it finds one next to this repo (or at
+`WEASEL_FW_DIR=<path to src/WEASEL_FW>`), and otherwise downloads
+`WeaselEditor.h` from GitHub (`WEASEL_REF=<branch>`, default `main`).
 
 ## Update firmware (flasher)
 
@@ -165,17 +162,17 @@ word, the sector is erased and rewritten.
 
 ## Releasing new firmware
 
-1. Arduino IDE, Daisy Seed board, USB support CDC.
-   **Sketch > Export Compiled Binary**, copy the `.bin` (or `.hex`) into `firmware/`.
+1. Open `src/WEASEL_FW` from the WEASEL repo in Arduino IDE: Daisy Seed board, USB support CDC.
+   **Sketch > Export Compiled Binary**, copy the `.bin` (or `.hex`) into `firmware/` here.
 2. Update `manifest.json`:
    ```json
    {
      "name": "WEASEL Digital West Coast Synthesiser Firmware",
-     "version": "v0.2",
+     "version": "v1.0",
      "builds": [{ "chipFamily": "STM32H750", "parts": [{ "path": "firmware/WEASEL_FW.ino.bin", "offset": "0x08000000" }] }]
    }
    ```
-3. If the protocol changed, bump `PROTOCOL` in both `protocol.js` and `WeaselEditor.h`.
+3. If the protocol changed, bump `PROTOCOL` in both `protocol.js` here and `WeaselEditor.h` in the WEASEL repo.
 4. `npm test` (Node 18+, no packages), commit, push.
 
 ## Repo layout
@@ -194,7 +191,7 @@ word, the sector is erased and rewritten.
 | `transport.js` | Web Serial, Web MIDI and demo transports, request/reply |
 | `dfuse.js` | STM32 DfuSe over WebUSB, with the H750 chip table |
 | `assets/` | Fonts (OFL, licences included), the panel's weasel artwork (from the KiCad panel silkscreen), and the .axs logo without text from [axs-instruments-assets](https://github.com/joebmz98/axs-instruments-assets), made all white, as the tab icon |
-| `firmware-src/` | WEASEL_FW 0.2 with the USB link |
+| `firmware/` | Released firmware binaries for the flasher (source: [WEASEL repo `src/WEASEL_FW`](https://github.com/joebmz98/Weasel-West-Coast-Synthesiser/tree/main/src/WEASEL_FW)) |
 | `test/` | Simulated F411 and H750 ROM bootloaders, flasher and protocol tests; host build of the firmware protocol code |
 
 ## Hosting

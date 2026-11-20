@@ -29,7 +29,8 @@ const ok = (name) => console.log(`  ok    ${name}`);
 
 let r = await req(P.msg(P.CMD.INFO), '41 42 0d 0a ');
 const info = P.decodeInfo(r.p);
-assert.deepEqual([info.protocol, info.midiCount, info.panelCount, info.version], [1, 1, P.PANEL_FIELDS.length, '0.2']);
+assert.deepEqual([info.protocol, info.midiCount, info.panelCount], [1, 1, P.PANEL_FIELDS.length]);
+  assert.match(info.version, /^\d+\.\d+/);  // firmware version, e.g. 1.0
 ok('INFO through serial noise: protocol 1, 1 MIDI byte, 14 panel bytes');
 
 r = await req(P.msg(P.CMD.GET_MIDI));
