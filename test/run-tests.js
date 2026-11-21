@@ -262,10 +262,25 @@ await test('frames carry the WEASEL header and stay 7-bit', () => {
   assert.ok(m.slice(1, -1).every((b) => b < 0x80));
 });
 
-await test('MIDI settings are just the channel; bad values clamp to omni', () => {
-  assert.deepEqual(P.MIDI_FIELDS.map((f) => f.key), ['channel']);
-  assert.deepEqual(P.decodeMidi(P.encodeMidi({ channel: 9 })), { channel: 9 });
+await test('MIDI settings: channel and pitch exclude; bad values clamp; old firmware gets 1 byte', () => {
+  assert.deepEqual(P.MIDI_FIELDS.map((f) => f.key), ['channel', 'pitchExclude']);
+  assert.deepEqual(P.decodeMidi(P.encodeMidi({ channel: 9, pitchExclude: 2 })), { channel: 9, pitchExclude: 2 });
   assert.equal(P.decodeMidi([99]).channel, P.OMNI);
+  assert.deepEqual(P.decodeMidi([3]), { channel: 3, pitchExclude: 0 });  // firmware before 1.1.3
+  assert.deepEqual(P.encodeMidi({ channel: 3, pitchExclude: 1 }, 1), [3]);
+  assert.equal(P.decodeMidi([0, 9]).pitchExclude, 3);
+});
+
+await test('simulated WEASEL: pitch exclude from the page and from the panel shift', () => {
+  const dev = new P.DemoWeasel();
+  dev.onReply = () => {};
+  dev.receive(P.msg(P.CMD.SET_MIDI, 2, P.PITCH_EXCLUDE.COMPLEX));
+  assert.deepEqual(dev.live, { channel: 2, pitchExclude: 1 });
+  dev.receive(P.msg(P.CMD.SET_MIDI, 5));  // a 1-byte SET_MIDI keeps pitch exclude
+  assert.deepEqual(dev.live, { channel: 5, pitchExclude: 1 });
+  dev.setPitchFromPanel(2);
+  assert.equal(dev.saved.pitchExclude, 2);
+  assert.equal(dev.saved.channel, P.OMNI);  // the unsaved channel stays unsaved
 });
 
 await test('panel: 14 modes, every section field on the wire once, defaults match the panel stars', () => {

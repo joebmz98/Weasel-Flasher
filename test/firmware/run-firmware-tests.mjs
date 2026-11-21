@@ -29,9 +29,9 @@ const ok = (name) => console.log(`  ok    ${name}`);
 
 let r = await req(P.msg(P.CMD.INFO), '41 42 0d 0a ');
 const info = P.decodeInfo(r.p);
-assert.deepEqual([info.protocol, info.midiCount, info.panelCount], [1, 1, P.PANEL_FIELDS.length]);
+assert.deepEqual([info.protocol, info.midiCount, info.panelCount], [1, P.MIDI_FIELDS.length, P.PANEL_FIELDS.length]);
   assert.match(info.version, /^\d+\.\d+/);  // firmware version, e.g. 1.0
-ok('INFO through serial noise: protocol 1, 1 MIDI byte, 14 panel bytes');
+ok('INFO through serial noise: protocol 1, 2 MIDI bytes (1.1.3+), 14 panel bytes');
 
 r = await req(P.msg(P.CMD.GET_MIDI));
 assert.deepEqual(P.decodeMidi(r.p), P.MIDI_DEFAULTS);
@@ -68,9 +68,42 @@ r = await req(P.msg(P.CMD.GET_MIDI));
 assert.equal(P.decodeMidi(r.p).channel, 4);
 ok('out-of-range channel clamps to omni; REVERT goes back to the save');
 
-r = await req(P.msg(P.CMD.SET_MIDI, 1, 2));
+r = await req(P.msg(P.CMD.SET_MIDI, 1, 2, 3));
+assert.equal(r.p[1], 2);
+r = await req(P.msg(P.CMD.SET_MIDI));
 assert.equal(r.p[1], 2);
 ok('SET_MIDI with the wrong length is refused');
+
+// --- pitch exclude (firmware 1.1.3+) ---
+r = await req(P.msg(P.CMD.SET_MIDI, ...P.encodeMidi({ channel: 4, pitchExclude: P.PITCH_EXCLUDE.MODULATION })));
+assert.deepEqual(P.decodeMidi(r.p), { channel: 4, pitchExclude: 2 });
+r = await req(P.msg(P.CMD.STATUS));
+st = P.decodeStatus(r.p);
+assert.equal(st.liveSum, P.checksum(P.encodeMidi({ channel: 4, pitchExclude: 2 })), 'checksums agree over both bytes');
+assert.equal(st.dirty, true);
+ok('SET_MIDI sets the pitch exclude bits, live and unsaved');
+
+r = await req(P.msg(P.CMD.SET_MIDI, 5));
+assert.deepEqual(P.decodeMidi(r.p), { channel: 5, pitchExclude: 2 });
+ok('a 1-byte SET_MIDI (page from before 1.1.3) changes only the channel');
+
+r = await req(P.msg(P.CMD.SET_MIDI, 4, 9));
+assert.equal(P.decodeMidi(r.p).pitchExclude, 3);
+r = await req(P.msg(P.CMD.REVERT));
+r = await req(P.msg(P.CMD.GET_MIDI));
+assert.deepEqual(P.decodeMidi(r.p), { channel: 4, pitchExclude: 0 });
+ok('pitch exclude clamps to 3; REVERT goes back to the saved value');
+
+r = await req(P.msg(P.CMD.SET_MIDI, 7, 0));
+assert.match(await send('PITCH 1'), /pitch=1/);
+r = await req(P.msg(P.CMD.STATUS));
+st = P.decodeStatus(r.p);
+assert.equal(st.dirty, true, 'the unsaved channel change stays unsaved');
+await send('REBOOT');
+r = await req(P.msg(P.CMD.GET_MIDI));
+assert.deepEqual(P.decodeMidi(r.p), { channel: 4, pitchExclude: 1 });
+assert.match(await send('PITCH 0'), /pitch=0/);
+ok('the panel shift saves pitch exclude at once, without saving an unsaved channel');
 
 r = await req(P.msg(P.CMD.GET_PANEL));
 assert.deepEqual(P.decodePanel(r.p), P.PANEL_DEFAULTS);

@@ -1,6 +1,7 @@
 // WEASEL engine: a line-by-line port of WEASEL_FW 0.2 (AudioCallback,
 // updateParameters, the MIDI handlers) and of the DaisySP modules it uses,
-// with the low pass gates and sequencer rests brought up to WEASEL_FW 1.1.2.
+// with the low pass gates and sequencer rests brought up to WEASEL_FW 1.1.2, and
+// per-oscillator MIDI pitch follow from 1.1.3.
 // It runs inside an AudioWorklet, or on the main thread as a fallback.
 // Pots are 0..1 here (the firmware reads 0..65535 and divides).
 function WEASEL_ENGINE() {
@@ -252,7 +253,7 @@ function WEASEL_ENGINE() {
         midiClockActive: false, midiClockSamplesPerTick: 0, midiSampleCounter: 0, midiTempo: 120, lastMidiClockTime: 0,
         midiClockTicks: 0, currentDivision: 1, currentDivisionIndex: 0, raw: new Float32Array(7), modUpdateCounter: 0,
         pulsarReleaseTime: 0.02, pulsarPeriodModCoeff: 0, attackTime: 0, releaseTime: 0, sustainDuration: 0,
-        frame: 0, paramCounter: 0,
+        frame: 0, paramCounter: 0, pitchExclude: 0,
       });
       // telemetry for the panel's LEDs and the scope
       this.tele = { steps: 0, env: 0, pulsar: 0, ctrl0: 0, ctrl1: 0, peak: 0 };
@@ -455,15 +456,18 @@ function WEASEL_ENGINE() {
         const vca1 = raw[6] * this.modOscLpgModAmount;
 
         // 7. oscillators
+        // firmware 1.1.3: pitchExclude bit0 = complex osc ignores the MIDI note, bit1 = modulation osc
         const transpose = m.midiFollow && this.midiNoteReceived ? this.lastMidiNoteFreq : 1;
-        this.modOsc.setFreq(this.modulationOscFreq * transpose * fastExp2(modFreqCoeff * 5 + this.modulationFine));
+        const modTranspose = this.pitchExclude & 2 ? 1 : transpose;
+        const compTranspose = this.pitchExclude & 1 ? 1 : transpose;
+        this.modOsc.setFreq(this.modulationOscFreq * modTranspose * fastExp2(modFreqCoeff * 5 + this.modulationFine));
         let modSig = this.modOsc.process();
         if (m.modWave >= 2) modSig = clamp(modSig, -1.2, 1.2);
         modSig = clamp(modSig, -1.5, 1.5);
         const depth = clamp(this.modulationOscMod + modModCoeff * 2, 0, 2);
         const fm = m.modType ? 0 : modSig * depth;
 
-        const cf = this.complexOscFreq * transpose * fastExp2((compFreqCoeff + fm) * 5 + this.complexOscFine);
+        const cf = this.complexOscFreq * compTranspose * fastExp2((compFreqCoeff + fm) * 5 + this.complexOscFine);
         this.complexOsc.setFreq(cf); this.morphOsc.setFreq(cf);
         const cs = this.complexOsc.process(), ms = this.morphOsc.process();
         let mixed = cs + (ms - cs) * this.complexOscMorphMix;
@@ -522,6 +526,7 @@ function WEASEL_ENGINE() {
         case 'matrix': this.matrix = d.matrix.map((r) => r.slice()); break;
         case 'steps': this.stepOn = d.steps.slice(); break;
         case 'master': this.master = d.value; break;
+        case 'pitchExclude': this.pitchExclude = d.value & 3; break;
         case 'pulsar': this.pulsarButton(); break;
         case 'noteOn': this.noteOn(d.note); break;
         case 'noteOff': this.noteOff(); break;

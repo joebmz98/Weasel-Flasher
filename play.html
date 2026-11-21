@@ -67,6 +67,13 @@
     .switch[aria-checked="false"] i { transform: translateY(16px); background: var(--metal); }
     .switch:focus-visible { outline: 2px dashed var(--silk); outline-offset: 3px; }
 
+    /* MIDI shift (firmware 1.1.3): lo pass gate channels that follow MIDI pitch flash */
+    .opts.flash .dot { animation: lpgflash .3s steps(1, end) infinite; }
+    @keyframes lpgflash { 0% { background: var(--silk); box-shadow: 0 0 6px rgba(255,255,255,.7); } 50% { background: var(--metal); box-shadow: none; } }
+    .key.held { outline: 2px solid var(--silk); outline-offset: 3px; }
+    .pitch-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 10px; font-size: 13px; }
+    .pitch-row .check { font-size: 13px; }
+
     .pushwrap { display: grid; justify-items: center; gap: 6px; font-size: 12px; }
     .pushwrap .key { --size: 40px; }
 
@@ -314,6 +321,12 @@
             <button class="btn small" id="clockBtn" type="button">send clock</button>
           </span>
         </div>
+        <div class="pitch-row">
+          <span class="dim">midi pitch follow</span>
+          <label class="check"><input type="checkbox" id="pitchComplex" checked> complex osc. <span class="dim">(gate 1)</span></label>
+          <label class="check"><input type="checkbox" id="pitchMod" checked> modulation osc. <span class="dim">(gate 2)</span></label>
+          <span class="dim" id="shiftHint">or hold the complex osc. <em>midi</em> button for a second, then press a lo pass gate button</span>
+        </div>
         <p class="tip" style="margin:10px 0 0">computer keys: <code>a w s e d f t g y h u j k</code> play, <code>z</code> / <code>x</code> change octave. Notes reach WEASEL like its MIDI in jack: trigger selects set to midi, and complex osc. midi on to follow pitch.</p>
       </div>
     </section>
@@ -478,6 +491,7 @@
     { type: 'steps', steps: S.steps },
     { type: 'matrix', matrix: S.matrix },
     { type: 'master', value: S.master },
+    { type: 'pitchExclude', value: pitchExclude },
   ] });
   function sendFull() {
     const b = fullState();
@@ -601,7 +615,7 @@
   const refreshKnob = (i) => potInputs[i] && potInputs[i].render(i === 'master' ? S.master : S.pots[i]);
 
   // ---------- mode buttons and option lists ----------
-  const modeViews = {};
+  const modeViews = {}, modeBtns = {}, modeSets = {};
   function setMode(key, v) {
     S.modes[key] = v;
     send({ type: 'modes', modes: { [key]: v } });
@@ -631,9 +645,82 @@
     btn.className = 'key'; btn.type = 'button';
     btn.setAttribute('aria-label', `${label}: next mode`);
     btn.title = 'step to the next mode';
-    btn.addEventListener('click', () => setMode(key, (S.modes[key] + 1) % options.length));
+    btn.addEventListener('click', () => {
+      if (key === 'midiFollow') return;  // press / hold / release handled by the MIDI shift below
+      if (shiftEdit(key)) return;        // lo pass gate buttons while the MIDI shift is on
+      setMode(key, (S.modes[key] + 1) % options.length);
+    });
+    modeBtns[key] = btn; modeSets[key] = fs;
     box.append(fs, btn);
   });
+
+  // ---------- MIDI pitch follow and the MIDI shift (firmware 1.1.3) ----------
+  // pitchExclude bit0: complex osc ignores the MIDI note's pitch; bit1: modulation osc.
+  // Panel: hold midi 1 s (the gate LEDs flash), press level 1 / level 2, let go of midi to
+  // apply; that release doesn't toggle midi. Here the same works with two fingers on a touch
+  // screen. With a mouse, let go after the second: the shift stays on until midi is pressed again.
+  const PITCH_STORE = 'weasel.play.pitchExclude';
+  let pitchExclude = 0;
+  try { pitchExclude = (+localStorage.getItem(PITCH_STORE) || 0) & 3; } catch (e) { pitchExclude = 0; }
+  const shift = { down: false, timer: 0, active: false, used: false, latched: false, pending: 0 };
+  function setPitchExclude(v) {
+    pitchExclude = v & 3;
+    try { localStorage.setItem(PITCH_STORE, String(pitchExclude)); } catch (e) {}
+    send({ type: 'pitchExclude', value: pitchExclude });
+    renderPitch();
+  }
+  function renderPitch() {
+    const ex = shift.active ? shift.pending : pitchExclude;
+    $('pitchComplex').checked = !(pitchExclude & 1);
+    $('pitchMod').checked = !(pitchExclude & 2);
+    modeSets.lpg1Mode.classList.toggle('flash', shift.active && !(ex & 1));
+    modeSets.lpg2Mode.classList.toggle('flash', shift.active && !(ex & 2));
+    modeBtns.midiFollow.classList.toggle('held', shift.active);
+  }
+  function shiftEdit(key) {
+    if (!shift.active || (key !== 'lpg1Mode' && key !== 'lpg2Mode')) {
+      if (shift.down || shift.latched) { shift.used = true; return true; }  // other buttons are ignored during a shift
+      return false;
+    }
+    shift.used = true;
+    shift.pending ^= key === 'lpg1Mode' ? 1 : 2;
+    renderPitch();
+    return true;
+  }
+  function shiftEnd() {
+    if (shift.pending !== pitchExclude) setPitchExclude(shift.pending);
+    Object.assign(shift, { active: false, used: false, latched: false });
+    renderPitch();
+    setStatus('midi pitch: ' + (['both oscillators follow', 'only the modulation osc. follows', 'only the complex osc. follows', 'neither oscillator follows'][pitchExclude]), 'ok');
+  }
+  const midiBtn = modeBtns.midiFollow;
+  midiBtn.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    try { midiBtn.setPointerCapture(e.pointerId); } catch (err) {}
+    if (shift.latched) { shift.down = true; return; }  // this press ends the latched shift
+    shift.down = true; shift.used = false; shift.pending = pitchExclude;
+    clearTimeout(shift.timer);
+    shift.timer = setTimeout(() => { if (shift.down) { shift.active = true; renderPitch(); } }, 1000);
+  });
+  function midiUp() {
+    if (!shift.down) return;
+    shift.down = false;
+    clearTimeout(shift.timer);
+    if (shift.latched) { shiftEnd(); return; }
+    if (shift.active) {
+      if (shift.used) shiftEnd();
+      else { shift.latched = true; setStatus('midi shift: press a lo pass gate button, then press midi to apply'); }
+      return;
+    }
+    if (!shift.used) setMode('midiFollow', (S.modes.midiFollow + 1) % 2);  // a plain press and release
+  }
+  midiBtn.addEventListener('pointerup', midiUp);
+  midiBtn.addEventListener('pointercancel', () => { shift.down = false; clearTimeout(shift.timer); });
+  midiBtn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMode('midiFollow', (S.modes.midiFollow + 1) % 2); } });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (shift.active || shift.latched)) { shift.pending = pitchExclude; shiftEnd(); } });
+  $('pitchComplex').addEventListener('change', () => setPitchExclude((pitchExclude & 2) | ($('pitchComplex').checked ? 0 : 1)));
+  $('pitchMod').addEventListener('change', () => setPitchExclude((pitchExclude & 1) | ($('pitchMod').checked ? 0 : 2)));
+  renderPitch();
 
   // ---------- sequencer step switches (latching) and step LEDs ----------
   const stepLeds = [], stepSw = [];

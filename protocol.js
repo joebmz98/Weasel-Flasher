@@ -13,8 +13,8 @@
 // | Cmd | Request                        | Reply                                   |
 // |-----|--------------------------------|-----------------------------------------|
 // | 01  | INFO                           | 41 proto, MIDI byte count, panel byte count, version ASCII |
-// | 02  | GET_MIDI                       | 42 the live MIDI settings (1 byte)      |
-// | 03  | SET_MIDI <1 byte>              | 42 the live settings after clamping     |
+// | 02  | GET_MIDI                       | 42 the live MIDI settings (MIDI byte count bytes) |
+// | 03  | SET_MIDI <1..count bytes>      | 42 the live settings after clamping     |
 // | 04  | GET_PANEL                      | 44 the panel's button modes (14 bytes)  |
 // | 05  | SET_PANEL <14 bytes>           | 44 the panel modes after clamping       |
 // | 06  | STATUS                         | 46 see decodeStatus()                   |
@@ -25,7 +25,9 @@
 // |     | anything refused               | 7F <cmd> <reason>                       |
 //
 // MIDI settings: SET_MIDI applies at once; SAVE keeps it in the Seed's QSPI
-// flash (survives firmware updates).
+// flash (survives firmware updates). Firmware before 1.1.3 has 1 MIDI byte (the
+// channel), 1.1.3+ has 2 (channel, pitch exclude). INFO says which: send at most
+// that many bytes. 1.1.3 still takes a 1-byte SET_MIDI (channel only).
 // Panel modes: SET_PANEL applies at once, like pressing the panel buttons.
 // They are not stored on WEASEL; presets live in the browser.
 
@@ -42,12 +44,17 @@ export const NAK_REASON = { 1: 'unknown command', 2: 'wrong length', 3: 'missing
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // ---------------------------------------------------------------------------
-// MIDI settings: just the receive channel.
+// MIDI settings: the receive channel, and (firmware 1.1.3+) which oscillators
+// ignore the MIDI note's pitch.
 // ---------------------------------------------------------------------------
 
 export const OMNI = 16;
+// pitchExclude bits. 0 = both oscillators follow the MIDI note (factory).
+// Also set on the panel: hold MIDI 1 s, then press LPG 1 / LPG 2.
+export const PITCH_EXCLUDE = { COMPLEX: 1, MODULATION: 2 };
 export const MIDI_FIELDS = [
   { key: 'channel', min: 0, max: 16, def: OMNI },   // 0-15 = channel 1-16, 16 = omni
+  { key: 'pitchExclude', min: 0, max: 3, def: 0 },  // 1.1.3+: bit0 complex osc (LPG 1), bit1 modulation osc (LPG 2)
 ];
 export const MIDI_DEFAULTS = Object.freeze(Object.fromEntries(MIDI_FIELDS.map((f) => [f.key, f.def])));
 
@@ -116,7 +123,8 @@ function decodeWith(fields, bytes) {
   return out;
 }
 
-export const encodeMidi = (s) => encodeWith(MIDI_FIELDS, s);
+// count: how many MIDI bytes the firmware has (INFO's midiCount); older firmware has 1.
+export const encodeMidi = (s, count = MIDI_FIELDS.length) => encodeWith(MIDI_FIELDS, s).slice(0, count);
 export const decodeMidi = (b) => decodeWith(MIDI_FIELDS, b);
 export const encodePanel = (s) => encodeWith(PANEL_FIELDS, s);
 export const decodePanel = (b) => decodeWith(PANEL_FIELDS, b);
@@ -210,7 +218,7 @@ export const channelName = (c) => (c === OMNI ? 'omni' : `channel ${c + 1}`);
 // A WEASEL that lives in the page, for "try demo" and the tests. It answers
 // exactly like the firmware and makes up some MIDI traffic to show.
 export class DemoWeasel {
-  constructor({ version = '1.1-demo' } = {}) {
+  constructor({ version = '1.1.3-demo' } = {}) {
     this.version = version;
     this.saved = { ...MIDI_DEFAULTS };
     this.live = { ...MIDI_DEFAULTS };
@@ -223,6 +231,12 @@ export class DemoWeasel {
 
   reply(cmd, data = []) { this.onReply(msg(cmd, ...data)); }
   nak(cmd, reason) { this.reply(RPL.NAK, [cmd & 0x7f, reason]); }
+
+  // The panel's MIDI shift (hold MIDI, press LPG 1 / LPG 2): live and saved at once.
+  setPitchFromPanel(mask) {
+    this.live = { ...this.live, pitchExclude: mask & 3 };
+    this.saved = { ...this.saved, pitchExclude: mask & 3 };
+  }
 
   // Someone pressed a panel button (used by the demo to show panel changes arriving).
   press(key) {
@@ -268,10 +282,13 @@ export class DemoWeasel {
         return this.reply(RPL.INFO, [PROTOCOL, MIDI_FIELDS.length, PANEL_FIELDS.length, ...[...this.version].map((c) => c.charCodeAt(0) & 0x7f)]);
       case CMD.GET_MIDI:
         return this.reply(RPL.MIDI, encodeMidi(this.live));
-      case CMD.SET_MIDI:
-        if (p.length !== MIDI_FIELDS.length) return this.nak(cmd, 2);
-        this.live = decodeMidi(p);
+      case CMD.SET_MIDI: {
+        if (p.length < 1 || p.length > MIDI_FIELDS.length) return this.nak(cmd, 2);
+        const full = encodeMidi(this.live);
+        p.forEach((b, i) => { full[i] = b; });  // a 1-byte SET_MIDI keeps the rest
+        this.live = decodeMidi(full);
         return this.reply(RPL.MIDI, encodeMidi(this.live));
+      }
       case CMD.GET_PANEL:
         return this.reply(RPL.PANEL, encodePanel(this.panel));
       case CMD.SET_PANEL:

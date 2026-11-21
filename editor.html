@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WEASEL MIDI Settings | .axs instruments</title>
-  <meta name="description" content="Set the WEASEL synthesiser's MIDI receive channel over USB, and watch incoming MIDI.">
+  <meta name="description" content="Set the WEASEL synthesiser's MIDI receive channel and which oscillators follow MIDI pitch over USB, and watch incoming MIDI.">
   <link rel="preload" href="assets/fonts/caprasimo-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/nanum-gothic-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="assets/axs-icon-32.png" type="image/png" sizes="32x32">
@@ -19,6 +19,10 @@
     @media (max-width: 720px) { .connect { grid-template-columns: 1fr; } .connect .btn-row { justify-content: flex-start; } }
 
     .channel { display: grid; gap: 16px; }
+    .pitch { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 14px 24px; align-items: start; }
+    .pitch .checks { display: grid; gap: 12px; }
+    .pitch .note { font-size: 14px; margin: 0; }
+    @media (max-width: 720px) { .pitch { grid-template-columns: 1fr; } }
     .channel label { font-size: 14px; }
     .channel .now { font-size: 15px; }
 
@@ -114,6 +118,20 @@
       </div>
     </section>
 
+    <section class="module span-12 last-in-row disabled-zone" id="pitchModule">
+      <div class="module-head"><h2>MIDI pitch</h2><span>follow</span><span class="fill"></span></div>
+      <div class="module-body pitch">
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="pitchComplex"> complex oscillator <span class="dim">&rsaquo; lo pass gate 1</span></label>
+          <label class="check"><input type="checkbox" id="pitchMod"> modulation oscillator <span class="dim">&rsaquo; lo pass gate 2</span></label>
+        </div>
+        <div>
+          <p class="note" id="pitchNow">&nbsp;</p>
+          <p class="note dim" id="pitchHow" style="margin-top:8px">On WEASEL: hold <em>midi</em> for a second until the lo pass gate LEDs flash, then press <em>level 1</em> or <em>level 2</em>. A flashing channel follows the note; let go of <em>midi</em> to apply. The panel keeps the change after power-off straight away.</p>
+        </div>
+      </div>
+    </section>
+
     <section class="module span-12 last-in-row disabled-zone">
       <div class="module-head"><h2>Memory</h2><span>save</span><span class="fill"></span></div>
       <div class="module-body store">
@@ -124,7 +142,7 @@
         <div class="btn-row">
           <button class="btn primary" id="saveBtn" type="button">save to weasel</button>
           <button class="btn" id="undoBtn" type="button">undo change</button>
-          <button class="btn" id="resetBtn" type="button">back to omni</button>
+          <button class="btn" id="resetBtn" type="button">factory settings</button>
         </div>
       </div>
     </section>
@@ -150,7 +168,7 @@
 </main>
 
 <script type="module">
-  import { msg, CMD, RPL, MAGIC, OMNI, MIDI_DEFAULTS, encodeMidi, decodeMidi, decodeStatus, checksum, noteName, channelName, TICK_DIVISIONS } from './protocol.js';
+  import { msg, CMD, RPL, MAGIC, OMNI, MIDI_DEFAULTS, MIDI_FIELDS, PITCH_EXCLUDE, encodeMidi, decodeMidi, decodeStatus, checksum, noteName, channelName, TICK_DIVISIONS } from './protocol.js';
   import { createConnection, keepDemoInLinks } from './app.js';
 
   const $ = (id) => document.getElementById(id);
@@ -158,6 +176,8 @@
   let editSeq = 0;
   let pending = false;
   let lastActivity = -1;
+  let midiCount = MIDI_FIELDS.length;  // from INFO: firmware before 1.1.3 has 1 MIDI byte
+  const enc = (s) => encodeMidi(s, midiCount);
 
   function setStatus(text, kind = '') {
     $('status').textContent = text;
@@ -169,7 +189,30 @@
   sel.append(new Option('omni*', String(OMNI)));
   for (let c = 0; c < 16; c++) sel.append(new Option(`channel ${c + 1}`, String(c)));
 
+  // ---------- MIDI pitch follow ----------
+  const hasPitch = () => midiCount >= 2;
+  function renderPitch() {
+    const ex = settings.pitchExclude || 0;
+    $('pitchComplex').checked = !(ex & PITCH_EXCLUDE.COMPLEX);
+    $('pitchMod').checked = !(ex & PITCH_EXCLUDE.MODULATION);
+    const ok = hasPitch();
+    $('pitchComplex').disabled = $('pitchMod').disabled = !ok;
+    $('pitchModule').style.opacity = ok ? '' : '.42';
+    const follow = [!(ex & PITCH_EXCLUDE.COMPLEX) && 'complex', !(ex & PITCH_EXCLUDE.MODULATION) && 'modulation'].filter(Boolean);
+    $('pitchNow').textContent = !ok ? 'Needs firmware 1.1.3: both oscillators follow the MIDI note.'
+      : follow.length === 2 ? 'With midi on, both oscillators follow the MIDI note.'
+      : follow.length === 1 ? `With midi on, only the ${follow[0]} oscillator follows the MIDI note; the other keeps its own pitch.`
+      : 'With midi on, neither oscillator follows the MIDI note.';
+  }
+  function pitchChanged() {
+    const ex = ($('pitchComplex').checked ? 0 : PITCH_EXCLUDE.COMPLEX) | ($('pitchMod').checked ? 0 : PITCH_EXCLUDE.MODULATION);
+    change({ pitchExclude: ex });
+  }
+  $('pitchComplex').addEventListener('change', pitchChanged);
+  $('pitchMod').addEventListener('change', pitchChanged);
+
   function render() {
+    renderPitch();
     sel.value = String(settings.channel);
     $('channelNow').textContent = settings.channel === OMNI
       ? 'WEASEL plays notes from every channel.'
@@ -191,7 +234,7 @@
     const seq = ++editSeq;
     setDirty(true);
     try {
-      const reply = decodeMidi(await conn.request(msg(CMD.SET_MIDI, ...encodeMidi(settings)), RPL.MIDI));
+      const reply = decodeMidi(await conn.request(msg(CMD.SET_MIDI, ...enc(settings)), RPL.MIDI));
       if (seq === editSeq) { pending = false; settings = reply; render(); }
     } catch (e) { pending = false; conn.fail(e); }
   }
@@ -237,12 +280,13 @@
     $('ledData').classList.toggle('on', blink);
     $('jackMidi').classList.toggle('lit', blink);
     lastActivity = st.activity;
-    if (!pending && st.liveSum !== checksum(encodeMidi(settings))) readSettings().catch(() => {});
+    if (!pending && st.liveSum !== checksum(enc(settings))) readSettings().catch(() => {});
   }
 
   const conn = createConnection({
     setStatus,
-    onConnect: async (link) => {
+    onConnect: async (link, info) => {
+      midiCount = Math.max(1, Math.min(MIDI_FIELDS.length, (info && info.midiCount) || 1));
       settings = decodeMidi(await link.request(msg(CMD.GET_MIDI), RPL.MIDI));
       render();
       lastActivity = -1;
@@ -265,8 +309,8 @@
   }
 
   $('saveBtn').addEventListener('click', () => command(msg(CMD.SAVE, ...MAGIC.SAVE), `Saved. WEASEL listens on ${channelName(settings.channel)} after power-off too.`));
-  $('undoBtn').addEventListener('click', () => command(msg(CMD.REVERT), 'Back to the saved channel.'));
-  $('resetBtn').addEventListener('click', () => command(msg(CMD.RESET, ...MAGIC.RESET), 'Back to omni, and saved.'));
+  $('undoBtn').addEventListener('click', () => command(msg(CMD.REVERT), 'Back to the saved settings.'));
+  $('resetBtn').addEventListener('click', () => command(msg(CMD.RESET, ...MAGIC.RESET), 'Back to the factory settings (omni, both oscillators follow MIDI pitch), and saved.'));
 
   keepDemoInLinks();
   render();

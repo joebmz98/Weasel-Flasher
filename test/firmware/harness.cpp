@@ -28,6 +28,7 @@ int main() {
     std::string l(line);
     if (l.rfind("PRESS", 0) == 0) { panelState[0] = (panelState[0] + 1) % 3; printf("pressed\n"); fflush(stdout); continue; }
     if (l.rfind("REBOOT", 0) == 0) { delete ed; ed = new weasel::Editor(); hook(ed); ed->begin(); printf("rebooted\n"); fflush(stdout); continue; }
+    if (l.rfind("PITCH", 0) == 0) { int m; sscanf(line + 6, "%d", &m); ed->setPitchExclude((uint8_t)m); printf("ok pitch=%d\n", ed->pitchExclude()); fflush(stdout); continue; }
     if (l.rfind("NOTE", 0) == 0) { int c, n, v; sscanf(line + 5, "%d %d %d", &c, &n, &v); ed->noteIn(c, n, v); printf("ok accepts=%d\n", ed->acceptsChannel(c)); fflush(stdout); continue; }
     SerialUSB.in.clear(); SerialUSB.pos = 0; SerialUSB.out.clear();
     unsigned v; const char *p = line;
