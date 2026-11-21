@@ -24,6 +24,11 @@ simulated WEASEL; add `?demo` to a page's address to start in the demo.
 - **MIDI in channel**: a drop-down, channel 1-16 or omni (factory: omni).
   Applies live; **save to weasel** keeps it after power-off. Clock and
   Start/Stop are received whatever the channel.
+- **MIDI pitch** (firmware 1.1.3+): which oscillators follow the MIDI note
+  when the complex osc's midi mode is on (factory: both). Also set on the
+  panel: hold **midi** for a second until the lo pass gate LEDs flash, press
+  **level 1** (complex) or **level 2** (modulation), let go of midi. The panel
+  saves it at once; changes here are kept with **save to weasel**.
 - **MIDI in monitor**: last note, channel, velocity, held note, incoming clock
   tempo and whether WEASEL is synced to it.
 
@@ -65,7 +70,7 @@ and field order are in `protocol.js`.
 | Cmd | Request | Reply |
 | --- | --- | --- |
 | `01` | INFO | `41`: protocol, MIDI byte count, panel byte count, version string |
-| `02` / `03` | GET_MIDI / SET_MIDI `<channel>` | `42`: live channel (0-15, 16 = omni) |
+| `02` / `03` | GET_MIDI / SET_MIDI `<channel> [<pitch exclude>]` | `42`: live channel (0-15, 16 = omni), and from 1.1.3 the pitch exclude bits (1 complex, 2 modulation). INFO's MIDI byte count says how many bytes the firmware has |
 | `04` / `05` | GET_PANEL / SET_PANEL `<14 bytes>` | `44`: panel modes |
 | `06` | STATUS | `46`: unsaved flag, checksums, last note/channel/velocity, held, clock, bpm, activity, storage state, panel checksum |
 | `07` / `08` / `09` | SAVE `"SAV"` / REVERT / RESET `"DEF"` | `46` |
@@ -91,6 +96,12 @@ browser won't load one (pages opened straight from disk).
 - MIDI in: on-screen keys, computer keys (`a w s e d f t g y h u j k`, `z` /
   `x` for octave), a Web MIDI input with channel select, and a test clock to
   try sync mode.
+- MIDI pitch follow per oscillator (firmware 1.1.3): two checkboxes under
+  MIDI in, or the panel's shift on the complex osc. midi button. Hold it a
+  second and the lo pass gate options flash; press a gate's button to take
+  that oscillator in or out of MIDI pitch. With two fingers on a touch screen
+  it works like the panel; with a mouse, let go and the shift stays on until
+  you press midi again (Esc cancels).
 - Master volume and an output scope, which the hardware doesn't have.
 - Patches: a few built in, store more in this browser, copy / paste as JSON.
   A patch holds the whole panel, cables and pots included.
