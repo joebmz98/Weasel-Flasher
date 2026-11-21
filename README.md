@@ -76,8 +76,10 @@ and field order are in `protocol.js`.
 
 WEASEL in the browser, no hardware needed. `play-engine.js` is a line-by-line
 port of WEASEL_FW 0.2's `AudioCallback`, `updateParameters` and MIDI handlers,
-with the DaisySP modules it uses (Oscillator, Adsr, Svf, MoogLadder, ReverbSc,
-Wavefolder). It runs in an AudioWorklet, or in a ScriptProcessor where the
+with the DaisySP modules it uses (Oscillator, Adsr, MoogLadder, ReverbSc,
+Wavefolder). The low pass gates and the sequencer rests follow firmware 1.1.2:
+the gates are the same Buchla 292 model as the firmware's `buchla_lpg.cpp`
+(see Credits), and a sequencer step that is off sends no trigger. It runs in an AudioWorklet, or in a ScriptProcessor where the
 browser won't load one (pages opened straight from disk).
 
 - Every fader and knob, mapped to the firmware's pot index and curve, with the
@@ -184,7 +186,7 @@ word, the sector is erased and rewritten.
 | `editor.html` | MIDI settings: channel drop-down and MIDI in monitor |
 | `presets.html` | Panel modes and the preset library |
 | `play.html` | The synth in the browser |
-| `play-engine.js` | WEASEL_FW 0.2's sound engine and DaisySP modules, ported to JavaScript |
+| `play-engine.js` | WEASEL_FW 0.2's sound engine and DaisySP modules, ported to JavaScript, with the 1.1.2 Buchla 292 low pass gate model |
 | `play-patches.js` | Built-in patches for `play.html` |
 | `app.js` | Connection panel shared by the two pages above |
 | `theme.css` | Front panel look: Caprasimo for the Cooper Black wordmark, Nanum Gothic for Malgun Gothic labels |
@@ -199,3 +201,13 @@ word, the sector is erased and rewritten.
 
 GitHub Pages (Settings > Pages > Deploy from branch > `main` / root). WebUSB,
 Web Serial and Web MIDI all need HTTPS, which Pages provides.
+
+## Credits
+
+The low pass gate model in `play-engine.js` (and in the firmware's
+`buchla_lpg.cpp`) is built on Julian Parker & Stefano D'Angelo,
+[*A Digital Model of the Buchla Lowpass-Gate*](https://dafx.de/paper-archive/details/uqLQLFI9j52bBmv10UKKMg)
+(DAFx-13, 2013); Josh Rohs, *A Matlab Implementation of the Buchla Lopass Gate*
+(McGill University MUMT618, 2018); and Segfault1602's
+[`sfdsp::BuchlaLPG`](https://github.com/Segfault1602/libdsp/blob/main/src/buchla_lpg.cpp)
+(libdsp, MIT License, Copyright (c) 2023 Segfault1602). After Don Buchla's 292 Lopass Gate.

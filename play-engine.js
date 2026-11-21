@@ -1,5 +1,6 @@
 // WEASEL engine: a line-by-line port of WEASEL_FW 0.2 (AudioCallback,
-// updateParameters, the MIDI handlers) and of the DaisySP modules it uses.
+// updateParameters, the MIDI handlers) and of the DaisySP modules it uses,
+// with the low pass gates and sequencer rests brought up to WEASEL_FW 1.1.2.
 // It runs inside an AudioWorklet, or on the main thread as a fallback.
 // Pots are 0..1 here (the firmware reads 0..65535 and divides).
 function WEASEL_ENGINE() {
@@ -76,34 +77,73 @@ function WEASEL_ENGINE() {
     }
   }
 
-  // ---------- DaisySP Svf (double-sampled Chamberlin) ----------
-  class Svf {
-    constructor(sr) { this.sr = sr; this.init(); }
-    init() {
-      this.fc = 200; this.res = 0.5; this.drive = 0.5; this.preDrive = 0.5; this.freq = 0.25; this.damp = 0;
-      this.notch = 0; this.low = 0; this.high = 0; this.band = 0; this.outLow = 0; this.fcMax = this.sr / 3;
+  // ---------- Buchla 292 low pass gate (port of WEASEL_FW 1.1.2 buchla_lpg.cpp) ----------
+  // Vactrol + audio circuit model after Parker & D'Angelo (DAFx-13), Rohs (McGill
+  // MUMT618, 2018) and sfdsp::BuchlaLPG (Segfault1602/libdsp, MIT). Modes switch the
+  // circuit's components as on the 292: 0 VCA (Ra 5k), 1 Lopass (C3 4.7nF + feedback
+  // resonance), 2 Both. Kept in step with the firmware: change both together.
+  const LPG = {
+    IMAX: 0.04, IMIN: 1e-7, VMAX: 10.7, IS: 10.1e-5, IVEXP: 0.569832,
+    AVAC: 3.4645912, BVAC: 1136.2129956, VACPOW: 1.4,
+    C1: 1e-9, C2: 220e-12, C3LP: 4.7e-9, RA_BOTH: 5e6, RA_VCA: 5e3, INTERVAL: 4,
+  };
+  const vactrolR = (i) => LPG.AVAC * Math.pow(Math.max(i, LPG.IMIN), -LPG.VACPOW) + LPG.BVAC;
+  class BuchlaLpg {
+    constructor(sr) {
+      this.f = 1 / (2 * sr); this.ctrlDt = LPG.INTERVAL / sr;
+      this.res = 0; this.rhoOn = 0.9; this.rhoOff = 0.9;
+      this.setVactrolTimes(0.012, 0.25);
+      this.mode = -1; this.setMode(2);
+      this.reset();
     }
-    setFreq(f) {
-      this.fc = clamp(f, 1e-6, this.fcMax);
-      this.freq = 2 * Math.sin(Math.PI * Math.min(0.25, this.fc / (this.sr * 2)));
-      this.damp = Math.min(2 * (1 - Math.pow(this.res, 0.25)), Math.min(2, 2 / this.freq - this.freq * 0.5));
+    reset() {
+      this.sc = 0; this.yc = 0; this.prevI = 0; this.prevDir = 2; this.wc = this.wcOff;
+      this.s0 = 0; this.s1 = 0; this.rf = vactrolR(0); this.counter = 0; this.coeffs();
     }
-    setRes(r) {
-      this.res = clamp(r, 0, 1);
-      this.damp = Math.min(2 * (1 - Math.pow(this.res, 0.25)), Math.min(2, 2 / this.freq - this.freq * 0.5));
-      this.drive = this.preDrive * this.res;
+    setMode(mode) {
+      if (mode === this.mode) return;
+      this.mode = mode;
+      this.ra = mode === 0 ? LPG.RA_VCA : LPG.RA_BOTH;
+      this.c3 = mode === 1 ? LPG.C3LP : 0;
+      // DC gain is Ra / (Ra + 2Rf); normalise fully open to unity
+      this.makeup = (this.ra + 2 * vactrolR(LPG.IMAX)) / this.ra;
+      if (this.rf) this.coeffs();
     }
-    process(input) {
-      let { low, band, freq, damp, drive } = this;
-      let notch = input - damp * band; low += freq * band; let high = notch - low;
-      band = freq * high + band - drive * band * band * band;
-      let outLow = 0.5 * low;
-      notch = input - damp * band; low += freq * band; high = notch - low;
-      band = freq * high + band - drive * band * band * band;
-      outLow += 0.5 * low;
-      this.low = low; this.band = band; this.outLow = outLow;
+    setResonance(r) { this.res = clamp(r, 0, 0.99); this.coeffs(); }
+    setVactrolTimes(on, off) { this.wcOn = 5 / Math.max(on, 1e-4); this.wcOff = 5 / Math.max(off, 1e-4); }
+    setVactrolRho(on, off) { this.rhoOn = clamp(on, -1, 1); this.rhoOff = clamp(off, -1, 1); }
+    control(cv) {
+      cv = clamp(cv, 0, LPG.VMAX);
+      const i = Math.min(LPG.IS * (Math.exp(LPG.IVEXP * cv) - 1), LPG.IMAX);
+      const dir = i > this.prevI ? 1 : i < this.prevI ? -1 : 0;
+      if (dir === 1) this.wc = this.wcOn * (1 - this.rhoOn + this.rhoOn * i / LPG.IMAX);
+      else if (dir === -1 && dir !== this.prevDir) this.wc = this.wcOff * (1 + this.rhoOff - this.rhoOff * this.yc / LPG.IMAX);
+      this.prevI = i; if (dir !== 0) this.prevDir = dir;
+      const g = this.wc * this.ctrlDt * 0.5, v = (i - this.sc) * g / (1 + g);
+      this.yc = v + this.sc; this.sc = this.yc + v;
+      this.rf = vactrolR(this.yc);
+      this.coeffs();
+    }
+    coeffs() {
+      const { C1, C2 } = LPG, gRf = 1 / this.rf, ra = this.ra, c3 = this.c3, f = this.f;
+      const a1 = gRf / C1, a2 = -(gRf + 1 / ra) / C1, b1 = gRf / C2, b2 = -2 * gRf / C2, b3 = b1, b4 = c3 / C2;
+      const a = c3 > 0 ? this.res * (2 * C1 * ra + (C2 + c3) * (ra + this.rf)) / (c3 * ra) : 0;
+      const k = 1 / (1 + b4), p = (b2 + b4 * a * a1) * k, q = (b3 + b4 * a * a2) * k, r = b1 * k;
+      const n00 = 1 - f * p, n01 = -f * q, n10 = -f * a1, n11 = 1 - f * a2, inv = 1 / (n00 * n11 - n01 * n10);
+      this.m00 = n11 * inv; this.m01 = -n01 * inv; this.m10 = -n10 * inv; this.m11 = n00 * inv; this.fb = f * r;
+    }
+    process(cv, input) {
+      if (++this.counter >= LPG.INTERVAL) { this.counter = 0; this.control(cv); }
+      const v0 = this.s0 + this.fb * input, v1 = this.s1;
+      const x0 = this.m00 * v0 + this.m01 * v1, x1 = this.m10 * v0 + this.m11 * v1;
+      this.s0 = 2 * x0 - this.s0; this.s1 = 2 * x1 - this.s1;
+      const out = x1 * this.makeup;
+      if (isBad(out)) { this.reset(); return 0; }
+      return out;
     }
   }
+  // firmware LPG settings (WEASEL_FW.ino, LPG SETTINGS)
+  const LPG_CV_VOLTS = 10.7, LPG_VACTROL_ON = 0.012, LPG_VACTROL_OFF = 0.25, LPG_VACTROL_RHO = 0.9, LPG_LOPASS_RES = 0.8;
 
   // ---------- DaisySP MoogLadder (Huovilainen, as in DaisySP) ----------
   class Moog {
@@ -194,11 +234,13 @@ function WEASEL_ENGINE() {
       this.modOsc = new Osc(sr); this.modOsc.wave = WAVE_SIN;
       this.env = new Adsr(sr);
       this.pulsar = new Adsr(sr); this.pulsar.setAttackTime(0.02); this.pulsar.setDecayTime(0.02); this.pulsar.setSustainLevel(1);
-      this.lpg1 = new Svf(sr); this.lpg2 = new Svf(sr);
+      this.lpg1 = new BuchlaLpg(sr); this.lpg2 = new BuchlaLpg(sr);
+      for (const g of [this.lpg1, this.lpg2]) {
+        g.setVactrolTimes(LPG_VACTROL_ON, LPG_VACTROL_OFF); g.setVactrolRho(LPG_VACTROL_RHO, LPG_VACTROL_RHO);
+        g.setResonance(LPG_LOPASS_RES);
+      }
       this.outFilter = new Moog(sr); this.outFilter.freq = 8000; this.outFilter.res = 0.2;
       this.reverb = new Reverb(sr); this.revOut = [0, 0];
-      this.lpgTable = new Float32Array(64);
-      for (let i = 0; i < 64; i++) this.lpgTable[i] = clamp(20 * Math.pow(2, (i / 63) * 9.81), 30, 18000);
 
       // state, as in the firmware
       Object.assign(this, {
@@ -210,7 +252,7 @@ function WEASEL_ENGINE() {
         midiClockActive: false, midiClockSamplesPerTick: 0, midiSampleCounter: 0, midiTempo: 120, lastMidiClockTime: 0,
         midiClockTicks: 0, currentDivision: 1, currentDivisionIndex: 0, raw: new Float32Array(7), modUpdateCounter: 0,
         pulsarReleaseTime: 0.02, pulsarPeriodModCoeff: 0, attackTime: 0, releaseTime: 0, sustainDuration: 0,
-        lastCtrl0: -1, lastCtrl1: -1, lastMode0: -1, lastMode1: -1, frame: 0, paramCounter: 0,
+        frame: 0, paramCounter: 0,
       });
       // telemetry for the panel's LEDs and the scope
       this.tele = { steps: 0, env: 0, pulsar: 0, ctrl0: 0, ctrl1: 0, peak: 0 };
@@ -333,17 +375,20 @@ function WEASEL_ENGINE() {
           this.lastPulsarEnvActive = on;
         } else if (this.midiTriggerPending) { seqStep = true; this.midiTriggerPending = false; }
 
+        // seqStep = the sequencer advanced; stepFired = it landed on an enabled step.
+        // A disabled step is a rest (firmware 1.1.2): no CV change and no trigger.
+        let stepFired = false;
         if (seqStep) {
           this.seqCurrentStep = (this.seqCurrentStep + 1) % this.seqMaxSteps;
-          if (this.stepOn[this.seqCurrentStep]) this.activeSeqCV = this.seqStepCV[this.seqCurrentStep];
-          else this.gateRemainingSamples = 0;
+          if (this.stepOn[this.seqCurrentStep]) { stepFired = true; this.activeSeqCV = this.seqStepCV[this.seqCurrentStep]; }
+          else if (m.envTrigger === 0) this.gateRemainingSamples = 0;
           this.tele.steps++;
         }
 
         // 2. pulsar
         let pulsarTrig = false;
         if (this.manualPulsarTrigger) { pulsarTrig = true; this.manualPulsarTrigger = false; }
-        else if (m.pulsarTrigger === 0) pulsarTrig = seqStep;
+        else if (m.pulsarTrigger === 0) pulsarTrig = stepFired;
         else if (m.pulsarTrigger === 2) { if (!this.pulsar.isRunning()) pulsarTrig = true; }
         else if (this.pulsarMidiTrigger) { pulsarTrig = true; this.pulsarMidiTrigger = false; }
         if (pulsarTrig) {
@@ -353,14 +398,14 @@ function WEASEL_ENGINE() {
 
         // 3. random voltage
         let rnd = false;
-        if (m.randomTrigger === 0) rnd = seqStep;
+        if (m.randomTrigger === 0) rnd = stepFired;
         else if (m.randomTrigger === 1) rnd = pulsarTrig;
         else if (this.randomMidiTrigger) { rnd = true; this.randomMidiTrigger = false; }
         if (rnd) this.currentRandomValue = Math.random();
 
         // 4. envelope
         let envTrig = false;
-        if (m.envTrigger === 0) envTrig = seqStep;
+        if (m.envTrigger === 0) envTrig = stepFired;
         else if (m.envTrigger === 2) { if (this.envMidiTrigger) { envTrig = true; this.envMidiTrigger = false; } }
         else envTrig = pulsarTrig;
 
@@ -429,40 +474,16 @@ function WEASEL_ENGINE() {
         let folded = fold(mixed, wfGain);
         if (m.modType) folded *= 1 + modSig * depth;
 
-        // 9. dual lo pass gate
-        let mix = 0;
-        const ctrl0 = clamp(this.complexOscSigLevel + vca0, 0, 0.9);
-        let s0 = folded;
-        if (m.lpg1Mode === 0) s0 *= ctrl0 * ctrl0;
-        else if (ctrl0 < 0.0005) s0 = 0;
-        else {
-          if (Math.abs(ctrl0 - this.lastCtrl0) > 0.002 || m.lpg1Mode !== this.lastMode0) {
-            this.lpg1.setFreq(this.lpgFreq(ctrl0));
-            this.lpg1.setRes(Math.min(m.lpg1Mode === 1 ? ctrl0 * ctrl0 * 0.2 : 0.1, 0.95));
-            this.lastCtrl0 = ctrl0; this.lastMode0 = m.lpg1Mode;
-          }
-          this.lpg1.process(s0); s0 = this.lpg1.outLow;
-          if (isBad(s0)) { this.lpg1.init(); s0 = 0; this.lastCtrl0 = -1; } else s0 = clamp(s0, -1, 1);
-          if (m.lpg1Mode === 2) s0 *= ctrl0;
-        }
-        mix += s0;
+        // 9. dual lo pass gate (Buchla 292 model; the vactrol does the slewing)
+        const ctrl0 = clamp(this.complexOscSigLevel + vca0, 0, 1);
+        this.lpg1.setMode(m.lpg1Mode);
+        let mix = this.lpg1.process(ctrl0 * LPG_CV_VOLTS, folded);
 
         let s1 = modSig;
         if (m.modWave >= 2) s1 = clamp(s1, -1, 1);
-        const ctrl1 = clamp(this.modOscSigLevel + vca1, 0, 0.9);
-        if (m.lpg2Mode === 0) s1 *= ctrl1;
-        else if (ctrl1 < 0.0001) s1 = 0;
-        else {
-          if (Math.abs(ctrl1 - this.lastCtrl1) > 0.002 || m.lpg2Mode !== this.lastMode1) {
-            this.lpg2.setFreq(this.lpgFreq(ctrl1));
-            this.lpg2.setRes(Math.min(m.lpg2Mode === 1 ? ctrl1 * ctrl1 * 0.2 : 0, 0.95));
-            this.lastCtrl1 = ctrl1; this.lastMode1 = m.lpg2Mode;
-          }
-          this.lpg2.process(s1); s1 = this.lpg2.outLow;
-          if (isBad(s1)) { this.lpg2.init(); s1 = 0; this.lastCtrl1 = -1; } else s1 = clamp(s1, -1, 1);
-          if (m.lpg2Mode === 2) s1 *= ctrl1;
-        }
-        mix += s1;
+        const ctrl1 = clamp(this.modOscSigLevel + vca1, 0, 1);
+        this.lpg2.setMode(m.lpg2Mode);
+        mix += this.lpg2.process(ctrl1 * LPG_CV_VOLTS, s1);
 
         if (isBad(mix)) mix = 0;
         mix = clamp(mix, -1, 1);
@@ -482,11 +503,6 @@ function WEASEL_ENGINE() {
         const a = Math.abs(l); if (a > t.peak) t.peak = a;
         this.scope[this.scopeW] = l; this.scopeW = (this.scopeW + 1) & 1023;
       }
-    }
-    lpgFreq(c) {
-      c = clamp(c, 0, 1); const idx = c * 63, i = idx | 0;
-      if (i >= 63) return this.lpgTable[63];
-      return this.lpgTable[i] + (idx - i) * (this.lpgTable[i + 1] - this.lpgTable[i]);
     }
     snapshot() {
       const t = this.tele;
