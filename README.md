@@ -130,7 +130,9 @@ triangle, as printed on the panel.
 
 Build in Arduino IDE with the Daisy Seed board, and
 **Tools > USB support > CDC (generic 'Serial' supersede U(S)ART)** so the USB
-port shows up as a serial port. MIDI stays on `Serial1` (TRS in, D14). Leave
+port shows up as a serial port. From firmware 1.1.5 the sketch's `build_opt.h`
+names that port **WEASEL** (older builds show "DAISY_SEED CDC in FS Mode"); the
+pages find it by its USB IDs either way. MIDI stays on `Serial1` (TRS in, D14). Leave
 `WEASEL_DEBUG` at 0 for the web pages: its serial log shares the USB port.
 
 `npm run test:firmware` compiles `WeaselEditor.h` on your computer with

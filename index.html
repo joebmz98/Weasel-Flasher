@@ -394,7 +394,7 @@
     const t = new SerialTransport();
     const link = new Link(t);
     try {
-      setStatus("Choose WEASEL's USB serial port in the popup");
+      setStatus('Choose WEASEL in the popup (firmware before 1.1.5 shows it as DAISY_SEED CDC in FS Mode)');
       await t.open();
       log(`Opened ${t.name}`);
       const info = decodeInfo(await link.request(msg(CMD.INFO), RPL.INFO, 1200));

@@ -75,7 +75,7 @@ export function createConnection({ setStatus, onConnect = async () => {}, onStat
     transport = t;
     t.onClose = () => { if (transport === t) { stop(); setStatus('WEASEL disconnected.', 'error'); } };
     try {
-      if (!quiet) setStatus(kind === 'serial' ? "Choose WEASEL's USB serial port in the popup" : kind === 'midi' ? 'Allow MIDI access when asked' : 'Starting the demo');
+      if (!quiet) setStatus(kind === 'serial' ? 'Choose WEASEL in the popup (firmware before 1.1.5 shows it as DAISY_SEED CDC in FS Mode)' : kind === 'midi' ? 'Allow MIDI access when asked' : 'Starting the demo');
       let info = null;
       if (kind === 'midi') {
         await t.open({ probe: async () => { try { info = await hello(); return true; } catch (e) { return false; } } });

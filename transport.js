@@ -15,7 +15,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export class SerialTransport {
   static get supported() { return 'serial' in navigator; }
 
-  // Ports this site already has permission for that look like a Daisy Seed.
+  // Ports this site already has permission for that look like a Daisy Seed (WEASEL 1.1.5+ names
+  // its port WEASEL; same USB IDs, 0483:5740).
   static async knownPorts() {
     if (!SerialTransport.supported) return [];
     try {
