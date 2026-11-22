@@ -21,8 +21,6 @@
   --metal: #9a9a9a;      /* exposed copper: buttons, fader slots, jacks */
   --metal-hi: #c4c4c4;
   --dim: #8a8a8a;        /* secondary silkscreen text */
-  --led: #ff8c1a;        /* lit LEDs */
-  --led-glow: rgba(255, 140, 26, .75);
   --rule: 1px solid var(--silk);
   --title: "Caprasimo", "Cooper Black", "Cooper Std", Georgia, serif;
   --label: "Nanum Gothic", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
@@ -66,7 +64,7 @@ strong { font-weight: 800; }
 }
 .edge .jack { display: inline-flex; align-items: center; gap: 7px; }
 .edge .jack::before { content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--metal); }
-.edge .jack.lit::before { background: var(--led); box-shadow: 0 0 6px var(--led-glow); }
+.edge .jack.lit::before { background: var(--silk); box-shadow: 0 0 6px rgba(255,255,255,.7); }
 .edge .push { margin-left: auto; }
 
 /* ---------- name plate ---------- */
@@ -140,7 +138,7 @@ strong { font-weight: 800; }
 .opt input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .opt .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--metal); flex: none; transition: background .12s, box-shadow .12s; }
 .opt:hover .dot { background: var(--metal-hi); }
-.opt input:checked + .dot { background: var(--led); box-shadow: 0 0 0 2px var(--mask), 0 0 0 3px var(--led), 0 0 8px var(--led-glow); }
+.opt input:checked + .dot { background: var(--silk); box-shadow: 0 0 0 2px var(--mask), 0 0 0 3px var(--silk); }
 .opt input:focus-visible + .dot { outline: 2px dashed var(--silk); outline-offset: 4px; }
 .opt .txt::after { content: "  \2039"; white-space: pre; color: var(--dim); }
 .opt .def { font-style: normal; }
@@ -205,7 +203,7 @@ strong { font-weight: 800; }
 
 /* ---------- LEDs ---------- */
 .led { width: 11px; height: 11px; border-radius: 50%; background: var(--metal); display: inline-block; flex: none; vertical-align: -1px; }
-.led.on { background: var(--led); box-shadow: 0 0 7px var(--led-glow); }
+.led.on { background: var(--silk); box-shadow: 0 0 7px rgba(255,255,255,.75); }
 
 /* ---------- form bits ---------- */
 .field {
