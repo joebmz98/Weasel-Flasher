@@ -28,7 +28,8 @@ simulated WEASEL; add `?demo` to a page's address to start in the demo.
   when the complex osc's midi mode is on (factory: both). Also set on the
   panel: hold **midi** for half a second until the lo pass gate LEDs flash, press
   **level 1** (complex) or **level 2** (modulation), let go of midi. The panel
-  saves it at once; changes here are kept with **save to weasel**.
+  saves it at once; changes here are kept with **save to weasel**. The
+  Presets page has the same switch as **midi pitch** under each oscillator.
 - **MIDI in monitor**: last note, channel, velocity, held note, incoming clock
   tempo and whether WEASEL is synced to it.
 
@@ -53,6 +54,10 @@ real position).
 
 - Clicking a mode changes WEASEL straight away, like pressing its button.
   Pressing a button on WEASEL shows up on the page.
+- **midi pitch** under each oscillator (firmware 1.1.3+): whether that
+  oscillator follows the MIDI note's pitch when midi is on, the same as the
+  panel's hold-midi shift. It changes WEASEL and is saved there at once. It's
+  a WEASEL setting rather than a panel mode, so it isn't part of a preset.
 - **store** saves the panel as a named preset; click a name to recall it. A
   lit dot marks the preset that matches the panel.
 - Presets live in this browser (`localStorage`). **export** writes them to a
