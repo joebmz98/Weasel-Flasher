@@ -1,6 +1,6 @@
 {
   "name": "WEASEL Digital West Coast Synthesiser Firmware",
-  "version": "v1.1.3",
+  "version": "v1.1.4",
   "builds": [
     {
       "chipFamily": "STM32H750",

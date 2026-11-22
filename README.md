@@ -181,7 +181,7 @@ word, the sector is erased and rewritten.
 ## Releasing new firmware
 
 1. Open `src/WEASEL_FW` from the WEASEL repo in Arduino IDE: Daisy Seed board, USB support CDC.
-   **Sketch > Export Compiled Binary**, copy the `.bin` (or `.hex`) into `firmware/` here.
+   **Sketch > Export Compiled Binary**, copy the `.hex` from the sketch's build folder into `firmware/` here (a `.bin` works too).
 2. Update `manifest.json`:
    ```json
    {
