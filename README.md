@@ -26,7 +26,7 @@ simulated WEASEL; add `?demo` to a page's address to start in the demo.
   Start/Stop are received whatever the channel.
 - **MIDI pitch** (firmware 1.1.3+): which oscillators follow the MIDI note
   when the complex osc's midi mode is on (factory: both). Also set on the
-  panel: hold **midi** for a second until the lo pass gate LEDs flash, press
+  panel: hold **midi** for half a second until the lo pass gate LEDs flash, press
   **level 1** (complex) or **level 2** (modulation), let go of midi. The panel
   saves it at once; changes here are kept with **save to weasel**.
 - **MIDI in monitor**: last note, channel, velocity, held note, incoming clock
@@ -97,8 +97,8 @@ browser won't load one (pages opened straight from disk).
   `x` for octave), a Web MIDI input with channel select, and a test clock to
   try sync mode.
 - MIDI pitch follow per oscillator (firmware 1.1.3): two checkboxes under
-  MIDI in, or the panel's shift on the complex osc. midi button. Hold it a
-  second and the lo pass gate options flash; press a gate's button to take
+  MIDI in, or the panel's shift on the complex osc. midi button. Hold it half
+  a second and the lo pass gate options flash; press a gate's button to take
   that oscillator in or out of MIDI pitch. With two fingers on a touch screen
   it works like the panel; with a mouse, let go and the shift stays on until
   you press midi again (Esc cancels).

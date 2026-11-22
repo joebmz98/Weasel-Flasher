@@ -50,7 +50,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 export const OMNI = 16;
 // pitchExclude bits. 0 = both oscillators follow the MIDI note (factory).
-// Also set on the panel: hold MIDI 1 s, then press LPG 1 / LPG 2.
+// Also set on the panel: hold MIDI 0.5 s, then press LPG 1 / LPG 2.
 export const PITCH_EXCLUDE = { COMPLEX: 1, MODULATION: 2 };
 export const MIDI_FIELDS = [
   { key: 'channel', min: 0, max: 16, def: OMNI },   // 0-15 = channel 1-16, 16 = omni
